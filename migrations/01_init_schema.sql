@@ -1,6 +1,6 @@
 -- Create profiles table in the public schema
 CREATE TABLE IF NOT EXISTS public.profiles (
-    id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
+    id UUID PRIMARY KEY,
     email VARCHAR(255) UNIQUE NOT NULL,
     full_name VARCHAR(255),
     avatar_url TEXT,
@@ -48,19 +48,40 @@ CREATE POLICY "Allow creators to delete tasks" ON public.tasks
 -- Trigger function to automatically insert new user profiles when a user signs up/in
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
+DECLARE
+    existing_id UUID;
 BEGIN
-    INSERT INTO public.profiles (id, email, full_name, avatar_url)
-    VALUES (
-        NEW.id,
-        NEW.email,
-        COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.raw_user_meta_data->>'name', 'User'),
-        COALESCE(NEW.raw_user_meta_data->>'avatar_url', NEW.raw_user_meta_data->>'picture', '')
-    )
-    ON CONFLICT (id) DO UPDATE SET
-        email = EXCLUDED.email,
-        full_name = EXCLUDED.full_name,
-        avatar_url = EXCLUDED.avatar_url,
-        updated_at = NOW();
+    -- Check if a profile already exists for this email
+    SELECT id INTO existing_id FROM public.profiles WHERE email = NEW.email;
+    
+    IF existing_id IS NOT NULL THEN
+        -- A placeholder profile already exists!
+        -- If the existing profile ID is different from the new auth.users ID, we must update it
+        IF existing_id <> NEW.id THEN
+            -- Update the profile's ID to match the new auth.users ID
+            -- First, update tasks that reference the old ID
+            UPDATE public.tasks SET created_by = NEW.id WHERE created_by = existing_id;
+            UPDATE public.tasks SET assigned_to = NEW.id WHERE assigned_to = existing_id;
+            
+            -- Then update the profile itself
+            UPDATE public.profiles
+            SET id = NEW.id,
+                full_name = COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.raw_user_meta_data->>'name', full_name),
+                avatar_url = COALESCE(NEW.raw_user_meta_data->>'avatar_url', NEW.raw_user_meta_data->>'picture', avatar_url),
+                updated_at = NOW()
+            WHERE id = existing_id;
+        END IF;
+    ELSE
+        -- No placeholder profile exists, insert a brand new one
+        INSERT INTO public.profiles (id, email, full_name, avatar_url)
+        VALUES (
+            NEW.id,
+            NEW.email,
+            COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.raw_user_meta_data->>'name', 'User'),
+            COALESCE(NEW.raw_user_meta_data->>'avatar_url', NEW.raw_user_meta_data->>'picture', '')
+        );
+    END IF;
+    
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
