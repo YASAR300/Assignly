@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { Chrome, Shield, Mail, Zap, LayoutGrid, CheckCircle2 } from 'lucide-react'
+import { Globe, Shield, Mail, Zap, LayoutGrid, CheckCircle2 } from 'lucide-react'
 
 export default function Home() {
   const router = useRouter()
@@ -124,7 +124,7 @@ export default function Home() {
                   <div className="w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
                 ) : (
                   <>
-                    <Chrome className="w-5 h-5 text-red-500 fill-red-500 group-hover/btn:scale-110 transition duration-300" />
+                    <Globe className="w-5 h-5 text-red-500 fill-red-500/20 group-hover/btn:scale-110 transition duration-300" />
                     <span>Continue with Google</span>
                   </>
                 )}
