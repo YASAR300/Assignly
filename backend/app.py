@@ -105,6 +105,16 @@ def require_auth(f):
 
         return f(*args, **kwargs)
     return decorated
+# ── Global Error Handler ──────────────────────────────────────────────────────
+@app.errorhandler(Exception)
+def handle_exception(e):
+    from werkzeug.exceptions import HTTPException
+    if isinstance(e, HTTPException):
+        return jsonify({"error": e.description}), e.code
+    print(f"[Unhandled Exception] {e}")
+    import traceback
+    traceback.print_exc()
+    return jsonify({"error": f"Internal Server Error: {str(e)}"}), 500
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────

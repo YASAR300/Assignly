@@ -30,7 +30,7 @@ def send_email(to_email, subject, html_content, text_content):
         msg.attach(part1)
         msg.attach(part2)
         
-        server = smtplib.SMTP(smtp_server, smtp_port)
+        server = smtplib.SMTP(smtp_server, smtp_port, timeout=5)
         server.starttls()
         server.login(smtp_user, smtp_password)
         server.sendmail(smtp_user, to_email, msg.as_string())
