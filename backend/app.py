@@ -124,6 +124,20 @@ def health():
     return jsonify({"status": "ok", "time": datetime.utcnow().isoformat()}), 200
 
 
+@app.route("/api/test-email-ports", methods=["GET"])
+def test_email_ports():
+    import socket
+    results = {}
+    for port in [587, 2525, 465, 25]:
+        try:
+            s = socket.create_connection(("smtp-relay.brevo.com", port), timeout=5)
+            s.close()
+            results[str(port)] = "Success (Connected)"
+        except Exception as e:
+            results[str(port)] = f"Failed: {str(e)}"
+    return jsonify(results), 200
+
+
 @app.route("/api/users", methods=["GET"])
 @require_auth
 def get_users():
