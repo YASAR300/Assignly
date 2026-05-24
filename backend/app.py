@@ -15,7 +15,7 @@ app.config.from_object(Config)
 CORS(app, resources={
     r"/api/*": {
         "origins": [
-            app.config["FRONTEND_URL"],
+            str(app.config.get("FRONTEND_URL", "")).rstrip("/"),
             "http://localhost:3000",
             "http://127.0.0.1:3000",
         ],

@@ -7,6 +7,8 @@ from dotenv import load_dotenv
 # Load env variables
 load_dotenv()
 
+from config import Config
+
 def send_email(to_email, subject, html_content, text_content):
     smtp_user = os.environ.get("SMTP_USER")
     smtp_password = os.environ.get("SMTP_PASSWORD")
@@ -234,7 +236,7 @@ def get_task_created_template(task_title, task_description, creator_name, assign
                 </div>
                 
                 <div class="btn-container">
-                    <a href="{os.environ.get('FRONTEND_URL', 'http://localhost:3000')}/dashboard" class="btn">View Task on Dashboard</a>
+                    <a href="{Config.FRONTEND_URL}/dashboard" class="btn">View Task on Dashboard</a>
                 </div>
             </div>
             <div class="footer">
@@ -436,7 +438,7 @@ def get_task_completed_template(task_title, task_description, creator_name, assi
                 </div>
                 
                 <div class="btn-container">
-                    <a href="{os.environ.get('FRONTEND_URL', 'http://localhost:3000')}/dashboard" class="btn">View Workspace</a>
+                    <a href="{Config.FRONTEND_URL}/dashboard" class="btn">View Workspace</a>
                 </div>
             </div>
             <div class="footer">

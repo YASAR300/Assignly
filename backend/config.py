@@ -24,4 +24,14 @@ class Config:
     SMTP_PORT     = int(os.environ.get("SMTP_PORT", 587))
 
     # CORS
-    FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
+    raw_frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3000")
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(raw_frontend_url.strip())
+        if parsed.scheme and parsed.netloc:
+            FRONTEND_URL = f"{parsed.scheme}://{parsed.netloc}"
+        else:
+            FRONTEND_URL = raw_frontend_url.rstrip("/")
+    except Exception:
+        FRONTEND_URL = raw_frontend_url.rstrip("/")
+
