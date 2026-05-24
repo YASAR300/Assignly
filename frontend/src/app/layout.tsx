@@ -1,21 +1,33 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { DM_Sans, DM_Serif_Display, DM_Mono } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const dmSans = DM_Sans({
+  variable: "--font-dm-sans",
   subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
+  style: ["normal", "italic"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const dmSerif = DM_Serif_Display({
+  variable: "--font-dm-serif",
   subsets: ["latin"],
+  weight: ["400"],
+  style: ["normal", "italic"],
+});
+
+const dmMono = DM_Mono({
+  variable: "--font-dm-mono",
+  subsets: ["latin"],
+  weight: ["400", "500"],
 });
 
 export const metadata: Metadata = {
-  title: "Assignly - Modern Task Management",
-  description: "A secure, beautiful, and real-time task manager featuring Google login and auto-synced Gmail alerts.",
+  title: "Assignly — Task Management",
+  description: "A calm, beautiful, and productive workspace for your team. Assign, track, and complete tasks with ease.",
 };
+
+import { Toaster } from "react-hot-toast";
 
 export default function RootLayout({
   children,
@@ -25,9 +37,40 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${dmSans.variable} ${dmSerif.variable} ${dmMono.variable} h-full`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col antialiased">
+        {children}
+        <Toaster
+          position="top-right"
+          toastOptions={{
+            duration: 3500,
+            style: {
+              background: 'var(--cream-50)',
+              border: '1px solid var(--cream-300)',
+              color: 'var(--warm-text)',
+              borderRadius: '14px',
+              fontFamily: 'var(--font-dm-sans), sans-serif',
+              fontSize: '13px',
+              fontWeight: 500,
+              boxShadow: '0 12px 36px rgba(60,35,10,0.08)',
+              padding: '12px 18px',
+            },
+            success: {
+              iconTheme: {
+                primary: 'var(--sage-mid)',
+                secondary: '#FAF6EE',
+              },
+            },
+            error: {
+              iconTheme: {
+                primary: 'var(--rose-mid)',
+                secondary: '#FAF6EE',
+              },
+            },
+          }}
+        />
+      </body>
     </html>
   );
 }
