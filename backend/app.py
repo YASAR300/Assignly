@@ -6,7 +6,7 @@ from functools import wraps
 from datetime import datetime
 from models import db, Profile, Task
 from config import Config
-from email_utils import send_email, get_task_created_template, get_task_completed_template
+from email_utils import send_email, get_task_created_template, get_task_completed_template, get_teammate_invited_template
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -149,6 +149,28 @@ def add_user():
         )
         db.session.add(profile)
         db.session.commit()
+
+        # Send teammate invitation email ─────────────────
+        try:
+            inviter = Profile.query.get(g.user_id)
+            inviter_name = inviter.full_name or inviter.email if inviter else "A teammate"
+            join_url = app.config.get("FRONTEND_URL", "http://localhost:3000")
+            
+            html, text = get_teammate_invited_template(
+                inviter_name = inviter_name,
+                invitee_name = full_name,
+                join_url     = join_url
+            )
+            
+            send_email(
+                to_email     = email,
+                subject      = f"✨ Join Assignly — Invited by {inviter_name}",
+                html_content = html,
+                text_content = text
+            )
+        except Exception as mail_err:
+            print(f"[Teammate Invite] Failed to send email: {mail_err}")
+
         return jsonify(profile.to_dict()), 201
     except Exception as e:
         db.session.rollback()
