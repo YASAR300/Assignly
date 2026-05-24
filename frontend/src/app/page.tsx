@@ -3,7 +3,23 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { Globe, Shield, Mail, Zap, LayoutGrid, CheckCircle2 } from 'lucide-react'
+import { toast } from 'react-hot-toast'
+import { CheckCircle2, Sparkles, Loader2, FolderKanban, Mail, Lock } from 'lucide-react'
+
+// Inline SVG icons to avoid lucide version mismatch
+const GoogleIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908C16.658 14.083 17.64 11.927 17.64 9.2z" fill="#4285F4"/>
+    <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/>
+    <path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
+    <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
+  </svg>
+)
+
+const CheckIcon = () => <CheckCircle2 size={14} style={{ stroke: 'var(--cream-700)', strokeWidth: '2px' }} />
+const SparkleIcon = () => <Sparkles size={16} style={{ stroke: 'var(--cream-600)', strokeWidth: '1.5px' }} />
+
+const KanbanIcon = () => <FolderKanban size={28} style={{ stroke: 'var(--cream-700)', strokeWidth: '1.8px' }} />
 
 export default function Home() {
   const router = useRouter()
@@ -33,176 +49,224 @@ export default function Home() {
         },
       })
       if (error) throw error
-    } catch (err: any) {
-      alert(`Login failed: ${err.message || err}`)
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unknown error'
+      toast.error(`Login failed: ${message}`)
       setLoading(false)
     }
   }
 
   if (checkingSession) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-white">
-        <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+      <div style={{ minHeight: '100vh', background: 'var(--cream-100)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '16px' }}>
+        <div className="spinner" style={{ width: '32px', height: '32px' }}></div>
+        <p style={{ color: 'var(--muted-text)', fontSize: '14px' }}>Loading your workspace…</p>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white relative overflow-hidden flex flex-col justify-between selection:bg-indigo-500 selection:text-white">
-      {/* Background Decorative Glow Blobs */}
-      <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-indigo-500/10 blur-[120px] pointer-events-none"></div>
-      <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full bg-emerald-500/10 blur-[120px] pointer-events-none"></div>
-      <div className="absolute top-[30%] right-[20%] w-[300px] h-[300px] rounded-full bg-purple-500/5 blur-[100px] pointer-events-none"></div>
+    <div style={{ minHeight: '100vh', background: 'var(--cream-100)', display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
+      {/* Grain texture */}
+      <div className="grain"></div>
 
-      {/* Grid Pattern overlay */}
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#0f172a_1px,transparent_1px),linear-gradient(to_bottom,#0f172a_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] opacity-40 pointer-events-none"></div>
+      {/* Large decorative circles */}
+      <div style={{
+        position: 'absolute', top: '-120px', right: '-100px',
+        width: '500px', height: '500px', borderRadius: '50%',
+        background: 'radial-gradient(circle, rgba(201,169,110,0.18) 0%, transparent 70%)',
+        pointerEvents: 'none'
+      }}></div>
+      <div style={{
+        position: 'absolute', bottom: '-80px', left: '-80px',
+        width: '380px', height: '380px', borderRadius: '50%',
+        background: 'radial-gradient(circle, rgba(143,188,139,0.15) 0%, transparent 70%)',
+        pointerEvents: 'none'
+      }}></div>
+      <div style={{
+        position: 'absolute', top: '40%', left: '20%',
+        width: '200px', height: '200px', borderRadius: '50%',
+        background: 'radial-gradient(circle, rgba(201,169,110,0.08) 0%, transparent 70%)',
+        pointerEvents: 'none'
+      }}></div>
 
-      {/* Header */}
-      <header className="max-w-7xl w-full mx-auto px-6 py-6 flex items-center justify-between relative z-10">
-        <div className="flex items-center gap-2">
-          <div className="bg-indigo-600 p-2 rounded-xl shadow-lg shadow-indigo-600/30">
-            <LayoutGrid className="w-6 h-6 text-white" />
-          </div>
-          <span className="text-xl font-bold tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">Assignly</span>
+      {/* Nav */}
+      <nav style={{ padding: '20px 40px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative', zIndex: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <KanbanIcon />
+          <span className="font-display" style={{ fontSize: '22px', color: 'var(--cream-800)', letterSpacing: '-0.3px' }}>Assignly</span>
         </div>
-        <div className="flex items-center gap-4">
-          <span className="text-xs text-indigo-400/90 font-semibold uppercase tracking-wider bg-indigo-500/10 border border-indigo-500/20 px-3 py-1.5 rounded-full">v1.0 Release</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--cream-200)', border: '1px solid var(--cream-300)', borderRadius: '999px', padding: '6px 12px 6px 8px' }}>
+          <SparkleIcon />
+          <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--cream-700)', letterSpacing: '0.03em' }}>v1.0 — Now Live</span>
         </div>
-      </header>
+      </nav>
 
-      {/* Hero Section */}
-      <main className="max-w-7xl w-full mx-auto px-6 py-12 grid grid-cols-1 lg:grid-cols-12 gap-16 items-center relative z-10 flex-grow">
-        {/* Left: Headline & Auth card */}
-        <div className="lg:col-span-6 flex flex-col justify-center space-y-8">
-          <div className="space-y-4">
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight leading-none">
-              Assign tasks.<br />
-              <span className="bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
-                Notify instantly.
+      {/* Main hero */}
+      <main style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 24px', position: 'relative', zIndex: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '64px', alignItems: 'center', maxWidth: '1100px', width: '100%' }}>
+
+          {/* LEFT: copy */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }} className="animate-fade-up">
+            {/* Eyebrow */}
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: 'var(--amber-light)', border: '1px solid #EDD9B8', borderRadius: '999px', padding: '6px 14px', width: 'fit-content' }}>
+              <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--amber-dark)', letterSpacing: '0.08em', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <Sparkles size={11} /> Task Management Re-imagined
               </span>
-            </h1>
-            <p className="text-slate-400 text-lg md:text-xl max-w-lg leading-relaxed">
-              Experience the next-generation task manager with seamless Google integration, automatic Gmail notification systems, and high-fidelity dashboards.
-            </p>
+            </div>
+
+            {/* Headline */}
+            <div>
+              <h1 className="font-display" style={{ fontSize: '52px', lineHeight: 1.08, color: 'var(--cream-900)', marginBottom: '16px', letterSpacing: '-1px' }}>
+                Work feels calm<br />
+                <span className="shimmer-text" style={{ fontStyle: 'italic' }}>when it's organised.</span>
+              </h1>
+              <p style={{ fontSize: '17px', color: 'var(--mid-text)', lineHeight: 1.7, maxWidth: '440px' }}>
+                A beautiful workspace to create, assign, and complete tasks — with automatic Gmail notifications that keep your whole team in sync.
+              </p>
+            </div>
+
+            {/* Feature checklist */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {[
+                'Sign in with Google in one click',
+                'Assign tasks to any team member',
+                'Gmail notifications — instantly delivered',
+                'Kanban board with live status tracking',
+              ].map(f => (
+                <div key={f} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <CheckIcon />
+                  <span style={{ fontSize: '14px', color: 'var(--mid-text)' }}>{f}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Social proof */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '4px' }}>
+              <div style={{ display: 'flex' }}>
+                {['#C9A96E','#8FBC8B','#7EB0CC','#D98080'].map((c, i) => (
+                  <div key={i} style={{ width: '28px', height: '28px', borderRadius: '50%', background: c, border: '2px solid var(--cream-100)', marginLeft: i === 0 ? 0 : '-8px', fontSize: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700 }}>
+                    {['Y','A','S','H'][i]}
+                  </div>
+                ))}
+              </div>
+              <p style={{ fontSize: '13px', color: 'var(--muted-text)' }}>Loved by growing teams everywhere</p>
+            </div>
           </div>
 
-          {/* Social Proof Checklist */}
-          <div className="grid grid-cols-2 gap-4 max-w-md pt-2">
-            <div className="flex items-center gap-2.5 text-sm text-slate-300">
-              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-              <span>Google OAuth 2.0</span>
-            </div>
-            <div className="flex items-center gap-2.5 text-sm text-slate-300">
-              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-              <span>Gmail SMTP Alerts</span>
-            </div>
-            <div className="flex items-center gap-2.5 text-sm text-slate-300">
-              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-              <span>Supabase Postgres</span>
-            </div>
-            <div className="flex items-center gap-2.5 text-sm text-slate-300">
-              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-              <span>Shadcn UI Dashboard</span>
-            </div>
-          </div>
+          {/* RIGHT: login card */}
+          <div style={{ animationDelay: '0.15s' }} className="animate-fade-up">
+            {/* Card */}
+            <div style={{
+              background: 'rgba(253,251,247,0.90)',
+              border: '1px solid var(--cream-300)',
+              borderRadius: '28px',
+              padding: '44px 40px',
+              boxShadow: '0 24px 64px rgba(60,35,10,0.12), 0 4px 16px rgba(60,35,10,0.06)',
+              backdropFilter: 'blur(20px)',
+              position: 'relative',
+              overflow: 'hidden',
+            }}>
+              {/* Decorative top corner accent */}
+              <div style={{ position: 'absolute', top: 0, right: 0, width: '120px', height: '120px', background: 'radial-gradient(circle at top right, rgba(201,169,110,0.15), transparent 70%)', pointerEvents: 'none' }}></div>
 
-          {/* Login Card */}
-          <div className="max-w-md w-full bg-slate-900/60 border border-slate-800/80 rounded-2xl p-8 backdrop-blur-xl shadow-2xl relative group">
-            <div className="absolute -inset-0.5 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-2xl blur opacity-20 group-hover:opacity-35 transition duration-500"></div>
-            <div className="relative space-y-6">
-              <div className="space-y-2">
-                <h2 className="text-xl font-bold">Start organizing today</h2>
-                <p className="text-sm text-slate-400">Log in with your Gmail account to manage, create, and assign tasks with ease.</p>
+              {/* Heading */}
+              <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+                <div style={{ width: '52px', height: '52px', background: 'var(--cream-200)', border: '1px solid var(--cream-300)', borderRadius: '16px', margin: '0 auto 16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <KanbanIcon />
+                </div>
+                <h2 className="font-display" style={{ fontSize: '26px', color: 'var(--cream-900)', marginBottom: '8px', letterSpacing: '-0.3px' }}>
+                  Welcome back
+                </h2>
+                <p style={{ fontSize: '14px', color: 'var(--muted-text)', lineHeight: 1.6 }}>
+                  Sign in with your Google account to access<br />your workspace and team tasks.
+                </p>
               </div>
 
+              {/* Google button */}
               <button
                 onClick={handleGoogleLogin}
                 disabled={loading}
-                className="w-full flex items-center justify-center gap-3 bg-white hover:bg-slate-100 disabled:bg-slate-200 text-slate-950 font-bold py-3.5 px-6 rounded-xl transition duration-300 shadow-xl relative overflow-hidden group/btn"
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '12px',
+                  background: loading ? 'var(--cream-200)' : 'white',
+                  border: '1.5px solid var(--cream-300)',
+                  borderRadius: '14px',
+                  padding: '14px 24px',
+                  fontSize: '15px',
+                  fontWeight: 600,
+                  color: 'var(--warm-text)',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  boxShadow: '0 2px 8px rgba(60,35,10,0.08)',
+                  fontFamily: 'DM Sans, sans-serif',
+                  marginBottom: '20px',
+                }}
+                onMouseEnter={e => { if (!loading) { (e.currentTarget as HTMLButtonElement).style.background = 'var(--cream-50)'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--cream-400)'; (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 4px 16px rgba(60,35,10,0.12)'; (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-1px)'; }}}
+                onMouseLeave={e => { if (!loading) { (e.currentTarget as HTMLButtonElement).style.background = 'white'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--cream-300)'; (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 2px 8px rgba(60,35,10,0.08)'; (e.currentTarget as HTMLButtonElement).style.transform = 'none'; }}}
               >
                 {loading ? (
-                  <div className="w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                  <><Loader2 size={16} className="animate-spin" /><span>Redirecting to Google…</span></>
                 ) : (
-                  <>
-                    <Globe className="w-5 h-5 text-red-500 fill-red-500/20 group-hover/btn:scale-110 transition duration-300" />
-                    <span>Continue with Google</span>
-                  </>
+                  <><GoogleIcon /><span>Continue with Google</span></>
                 )}
               </button>
 
-              <div className="flex items-center gap-2 justify-center text-xs text-slate-500 pt-2">
-                <Shield className="w-4 h-4 text-emerald-500/80" />
-                <span>Authorized secure connection with Supabase Guard</span>
+              {/* Divider */}
+              <div className="divider" style={{ marginBottom: '20px' }}>
+                <span>New to Assignly?</span>
               </div>
-            </div>
-          </div>
-        </div>
 
-        {/* Right: Premium UI Mockup Showcase */}
-        <div className="lg:col-span-6 relative hidden lg:block">
-          {/* Floating UI Elements */}
-          <div className="relative bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-2xl backdrop-blur-md max-w-lg mx-auto">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-800/80 mb-6">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-red-500/80"></div>
-                <div className="w-3 h-3 rounded-full bg-yellow-500/80"></div>
-                <div className="w-3 h-3 rounded-full bg-green-500/80"></div>
-              </div>
-              <span className="text-xs font-mono text-slate-500">task_workspace_board.app</span>
-            </div>
-
-            {/* Kanban Columns Mockup */}
-            <div className="space-y-4">
-              <div className="bg-slate-950/80 border border-slate-800/80 p-4 rounded-xl space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-xs text-indigo-400 font-bold tracking-wider uppercase bg-indigo-500/10 px-2 py-0.5 rounded">In Progress</span>
-                  <span className="text-xs text-rose-400 font-bold bg-rose-500/10 px-2 py-0.5 rounded">High</span>
+              {/* Register info */}
+              <div style={{ background: 'var(--sand-100)', border: '1px solid var(--cream-300)', borderRadius: '14px', padding: '16px 18px', display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                <div style={{ width: '32px', height: '32px', background: 'var(--cream-200)', borderRadius: '10px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--cream-600)' }}>
+                  <Sparkles size={16} />
                 </div>
-                <h4 className="font-bold text-sm">Deploy Next.js Frontend to Vercel</h4>
-                <p className="text-xs text-slate-400">Configure environments and set up seamless production deployments.</p>
-                <div className="flex items-center justify-between pt-2 border-t border-slate-900/60 mt-2">
-                  <span className="text-[10px] text-slate-500">Due: May 25, 2026</span>
-                  <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-[10px] text-white font-bold">YK</div>
+                <div>
+                  <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--warm-text)', marginBottom: '4px' }}>No registration needed</p>
+                  <p style={{ fontSize: '12px', color: 'var(--muted-text)', lineHeight: 1.5 }}>
+                    Your account is created automatically when you sign in with Google for the first time. No forms, no passwords.
+                  </p>
                 </div>
               </div>
 
-              <div className="bg-slate-950/80 border border-slate-800/80 p-4 rounded-xl space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-xs text-emerald-400 font-bold tracking-wider uppercase bg-emerald-500/10 px-2 py-0.5 rounded">Completed</span>
-                  <span className="text-xs text-slate-400 font-bold bg-slate-500/10 px-2 py-0.5 rounded">Medium</span>
-                </div>
-                <h4 className="font-bold text-sm text-slate-400 line-through">Integrate Google SMTP for email notifications</h4>
-                <p className="text-xs text-slate-500 line-through">Auto-deliver notifications to creators and assignees on updates.</p>
-                <div className="flex items-center justify-between pt-2 border-t border-slate-900/60 mt-2">
-                  <span className="text-[10px] text-slate-600">Completed</span>
-                  <div className="w-5 h-5 rounded-full bg-slate-800 flex items-center justify-center text-[10px] text-slate-400 font-bold">S9</div>
-                </div>
-              </div>
+              {/* Privacy note */}
+              <p style={{ fontSize: '11px', color: 'var(--muted-text)', textAlign: 'center', marginTop: '20px', lineHeight: 1.6, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                <Lock size={11} /> Secured by Supabase Auth · We never store your Google password
+              </p>
             </div>
-          </div>
 
-          {/* Floating Gmail Mockup Notification Box */}
-          <div className="absolute -bottom-8 -left-8 bg-slate-950/90 border border-indigo-500/30 p-4 rounded-xl shadow-2xl flex items-start gap-4 max-w-xs animate-bounce pointer-events-none backdrop-blur-md">
-            <div className="bg-indigo-500/20 p-2.5 rounded-lg border border-indigo-500/30 shrink-0">
-              <Mail className="w-5 h-5 text-indigo-400" />
+            {/* Below card floating badge */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'center',
+              marginTop: '20px',
+              gap: '8px',
+              flexWrap: 'wrap',
+            }}>
+              {[
+                { icon: <Mail size={14} style={{ stroke: 'var(--cream-700)' }} />, label: 'Gmail Alerts' },
+                { icon: <FolderKanban size={14} style={{ stroke: 'var(--cream-700)' }} />, label: 'Kanban Board' },
+                { icon: <Lock size={14} style={{ stroke: 'var(--cream-700)' }} />, label: 'Google OAuth' },
+              ].map(item => (
+                <div key={item.label} style={{ background: 'var(--cream-200)', border: '1px solid var(--cream-300)', borderRadius: '999px', padding: '6px 14px', fontSize: '12px', color: 'var(--mid-text)', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  {item.icon}
+                  <span>{item.label}</span>
+                </div>
+              ))}
             </div>
-            <div className="space-y-1">
-              <h5 className="font-bold text-xs text-white">Gmail Alert Received</h5>
-              <p className="text-[10px] text-slate-400 leading-normal">"YK assigned you task: Deploy Next.js Frontend to Vercel."</p>
-            </div>
-          </div>
-          
-          {/* Floating Speed Badge */}
-          <div className="absolute top-[-10px] right-[-15px] bg-slate-950/90 border border-emerald-500/30 p-3 rounded-xl shadow-2xl flex items-center gap-2 max-w-xs pointer-events-none backdrop-blur-md">
-            <Zap className="w-4 h-4 text-emerald-400" />
-            <span className="text-[10px] font-bold text-emerald-400">Zero Server Latency</span>
           </div>
         </div>
       </main>
 
       {/* Footer */}
-      <footer className="w-full text-center py-8 border-t border-slate-900 relative z-10 text-xs text-slate-600">
-        <p>&copy; 2026 Assignly Task Systems. Powered by Supabase & Flask.</p>
+      <footer style={{ textAlign: 'center', padding: '24px', borderTop: '1px solid var(--cream-300)', position: 'relative', zIndex: 10 }}>
+        <p style={{ fontSize: '12px', color: 'var(--muted-text)' }}>
+          © 2026 Assignly · Built with Next.js, Flask &amp; Supabase
+        </p>
       </footer>
     </div>
   )
