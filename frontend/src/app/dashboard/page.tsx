@@ -64,6 +64,7 @@ const COLUMNS = [
 export default function Dashboard() {
   const router = useRouter()
   const supabase = createClient()
+  const baseUrl = (process.env.NEXT_PUBLIC_BACKEND_URL || '').replace(/\/$/, '')
 
   const [session, setSession] = useState<any>(null)
   const [userProfile, setUserProfile] = useState<any>(null)
@@ -113,7 +114,7 @@ export default function Dashboard() {
     if (!session) return
     setLoadingTasks(true)
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/tasks`, { headers: headers() })
+      const res = await fetch(`${baseUrl}/api/tasks`, { headers: headers() })
       if (!res.ok) throw new Error('Failed to fetch tasks')
       setTasks(await res.json())
     } catch { showToast('Could not load tasks', 'err') }
@@ -123,7 +124,7 @@ export default function Dashboard() {
   const fetchUsers = useCallback(async () => {
     if (!session) return
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/users`, { headers: headers() })
+      const res = await fetch(`${baseUrl}/api/users`, { headers: headers() })
       if (res.ok) setUsers(await res.json())
     } catch { /* silent */ }
   }, [session, headers])
@@ -148,7 +149,7 @@ export default function Dashboard() {
         assigned_to: form.assigned_to || null,
         status: 'todo',
       }
-      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/tasks`, {
+      const res = await fetch(`${baseUrl}/api/tasks`, {
         method: 'POST', headers: headers(), body: JSON.stringify(body),
       })
       if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Error') }
@@ -164,7 +165,7 @@ export default function Dashboard() {
 
   const handleStatusChange = async (taskId: string, newStatus: string) => {
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/tasks/${taskId}`, {
+      const res = await fetch(`${baseUrl}/api/tasks/${taskId}`, {
         method: 'PUT', headers: headers(), body: JSON.stringify({ status: newStatus }),
       })
       if (!res.ok) throw new Error('Update failed')
@@ -181,7 +182,7 @@ export default function Dashboard() {
     if (!inviteForm.email.trim()) return
     setActionLoading(true)
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/users`, {
+      const res = await fetch(`${baseUrl}/api/users`, {
         method: 'POST',
         headers: headers(),
         body: JSON.stringify({
@@ -202,7 +203,7 @@ export default function Dashboard() {
 
   const handleAssigneeChange = async (taskId: string, newAssigneeId: string) => {
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/tasks/${taskId}`, {
+      const res = await fetch(`${baseUrl}/api/tasks/${taskId}`, {
         method: 'PUT',
         headers: headers(),
         body: JSON.stringify({ assigned_to: newAssigneeId || null }),
@@ -220,7 +221,7 @@ export default function Dashboard() {
     if (task.created_by !== userProfile?.id) { showToast('Only the creator can delete this task', 'err'); return }
     if (!confirm(`Delete "${task.title}"?`)) return
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/tasks/${task.id}`, {
+      const res = await fetch(`${baseUrl}/api/tasks/${task.id}`, {
         method: 'DELETE', headers: headers(),
       })
       if (!res.ok) throw new Error('Delete failed')
