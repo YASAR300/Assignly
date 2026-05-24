@@ -124,6 +124,56 @@ def health():
     return jsonify({"status": "ok", "time": datetime.utcnow().isoformat()}), 200
 
 
+@app.route("/api/trigger-test-email", methods=["GET"])
+def trigger_test_email():
+    import socket
+    import smtplib
+    import traceback
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+    
+    smtp_user     = os.environ.get("SMTP_USER")
+    smtp_password = os.environ.get("SMTP_PASSWORD")
+    smtp_server   = os.environ.get("SMTP_SERVER", "smtp-relay.brevo.com")
+    smtp_port     = int(os.environ.get("SMTP_PORT", 2525))
+    smtp_from     = os.environ.get("SMTP_FROM") or smtp_user
+    
+    info = {
+        "smtp_user": smtp_user,
+        "smtp_server": smtp_server,
+        "smtp_port": smtp_port,
+        "smtp_from": smtp_from,
+        "has_password": smtp_password is not None and len(smtp_password) > 0
+    }
+    
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = "Render Live SMTP Debug"
+        msg["From"]    = f"Assignly App <{smtp_from}>"
+        msg["To"]      = "sypher916@gmail.com"
+        
+        msg.attach(MIMEText("Render Live SMTP Debug", "plain"))
+        
+        server = smtplib.SMTP(smtp_server, smtp_port, timeout=10)
+        server.starttls()
+        server.login(smtp_user, smtp_password)
+        server.sendmail(smtp_from, "sypher916@gmail.com", msg.as_string())
+        server.quit()
+        
+        return jsonify({
+            "success": True,
+            "message": "Connected and sent email successfully!",
+            "env_info": info
+        }), 200
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc(),
+            "env_info": info
+        }), 500
+
+
 @app.route("/api/users", methods=["GET"])
 @require_auth
 def get_users():
