@@ -155,7 +155,7 @@ export default function Dashboard() {
       setForm({ title: '', description: '', priority: 'medium', due_date: '', assigned_to: '' })
       setIsCreateOpen(false)
       await fetchTasks()
-      showToast('Task created! Notification sent 📧')
+      showToast('Task created! Email notification sent.')
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Error'
       showToast(message, 'err')
@@ -169,7 +169,7 @@ export default function Dashboard() {
       })
       if (!res.ok) throw new Error('Update failed')
       setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus as Task['status'] } : t))
-      if (newStatus === 'completed') showToast('Task completed! Emails sent 🎉')
+      if (newStatus === 'completed') showToast('Task completed! Email notifications sent.')
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Error'
       showToast(message, 'err')
@@ -193,7 +193,7 @@ export default function Dashboard() {
       setInviteForm({ full_name: '', email: '' })
       setIsInviteOpen(false)
       await fetchUsers()
-      showToast('Teammate added successfully! 🎉')
+      showToast('Teammate added successfully!')
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Error'
       showToast(message, 'err')
@@ -209,7 +209,7 @@ export default function Dashboard() {
       })
       if (!res.ok) throw new Error('Assignee update failed')
       await fetchTasks()
-      showToast('Assignee updated! Notification sent 📧')
+      showToast('Assignee updated! Email notification sent.')
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Error'
       showToast(message, 'err')
@@ -611,10 +611,10 @@ export default function Dashboard() {
                             outline: 'none',
                           }}
                         >
-                          <option value="">👤 Unassigned</option>
+                          <option value="">Unassigned</option>
                           {users.filter(u => u.id !== userProfile?.id).map(u => (
                             <option key={u.id} value={u.id}>
-                              👤 {u.full_name || u.email}
+                              {u.full_name || u.email}
                             </option>
                           ))}
                         </select>
