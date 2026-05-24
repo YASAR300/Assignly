@@ -8,7 +8,7 @@ db = SQLAlchemy()
 class Profile(db.Model):
     __tablename__ = 'profiles'
     
-    id = db.Column(UUID(as_uuid=True), primary key=True)
+    id = db.Column(UUID(as_uuid=True), primary_key=True)
     email = db.Column(db.String(255), unique=True, nullable=False)
     full_name = db.Column(db.String(255))
     avatar_url = db.Column(db.Text)
@@ -32,7 +32,7 @@ class Profile(db.Model):
 class Task(db.Model):
     __tablename__ = 'tasks'
     
-    id = db.Column(UUID(as_uuid=True), primary key=True, default=uuid.uuid4)
+    id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     title = db.Column(db.String(255), nullable=False)
     description = db.Column(db.Text)
     status = db.Column(db.String(50), default='todo', nullable=False) # 'todo', 'in_progress', 'completed'
