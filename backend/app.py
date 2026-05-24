@@ -147,18 +147,23 @@ def add_user():
         
     try:
         profile = Profile.query.filter_by(email=email).first()
-        if profile:
-            return jsonify(profile.to_dict()), 200
-            
-        new_id = uuid.uuid4()
-        profile = Profile(
-            id=new_id,
-            email=email,
-            full_name=full_name,
-            avatar_url="",
-        )
-        db.session.add(profile)
-        db.session.commit()
+        is_new = False
+        if not profile:
+            is_new = True
+            new_id = uuid.uuid4()
+            profile = Profile(
+                id=new_id,
+                email=email,
+                full_name=full_name,
+                avatar_url="",
+            )
+            db.session.add(profile)
+            db.session.commit()
+        else:
+            # If name is provided, update it to keep it fresh
+            if data.get("full_name"):
+                profile.full_name = data.get("full_name").strip()
+                db.session.commit()
 
         # Send teammate invitation email ─────────────────
         try:
@@ -168,7 +173,7 @@ def add_user():
             
             html, text = get_teammate_invited_template(
                 inviter_name = inviter_name,
-                invitee_name = full_name,
+                invitee_name = profile.full_name or full_name,
                 join_url     = join_url
             )
             
@@ -181,7 +186,7 @@ def add_user():
         except Exception as mail_err:
             print(f"[Teammate Invite] Failed to send email: {mail_err}")
 
-        return jsonify(profile.to_dict()), 201
+        return jsonify(profile.to_dict()), 201 if is_new else 200
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
