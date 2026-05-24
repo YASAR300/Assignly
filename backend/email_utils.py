@@ -13,7 +13,7 @@ def send_email(to_email, subject, html_content, text_content):
     smtp_user     = os.environ.get("SMTP_USER")
     smtp_password = os.environ.get("SMTP_PASSWORD")
     smtp_server   = os.environ.get("SMTP_SERVER", "smtp-relay.brevo.com")
-    smtp_port     = int(os.environ.get("SMTP_PORT", 587))
+    smtp_port     = int(os.environ.get("SMTP_PORT", 2525))
     # SMTP_FROM = actual sender email shown to recipients
     # SMTP_USER = login credential (Brevo relay user, different from sender)
     smtp_from     = os.environ.get("SMTP_FROM") or smtp_user
