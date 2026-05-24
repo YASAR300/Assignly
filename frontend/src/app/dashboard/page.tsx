@@ -81,6 +81,7 @@ export default function Dashboard() {
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [isInviteOpen, setIsInviteOpen] = useState(false)
   const [actionLoading, setActionLoading] = useState(false)
+  const [updatingTask, setUpdatingTask] = useState<{id: string, field: 'status'|'assignee'} | null>(null)
 
   // Form state
   const [form, setForm] = useState({ title: '', description: '', priority: 'medium', due_date: '', assigned_to: '' })
@@ -164,6 +165,7 @@ export default function Dashboard() {
   }
 
   const handleStatusChange = async (taskId: string, newStatus: string) => {
+    setUpdatingTask({ id: taskId, field: 'status' })
     try {
       const res = await fetch(`${baseUrl}/api/tasks/${taskId}`, {
         method: 'PUT', headers: headers(), body: JSON.stringify({ status: newStatus }),
@@ -174,6 +176,8 @@ export default function Dashboard() {
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Error'
       showToast(message, 'err')
+    } finally {
+      setUpdatingTask(null)
     }
   }
 
@@ -202,6 +206,7 @@ export default function Dashboard() {
   }
 
   const handleAssigneeChange = async (taskId: string, newAssigneeId: string) => {
+    setUpdatingTask({ id: taskId, field: 'assignee' })
     try {
       const res = await fetch(`${baseUrl}/api/tasks/${taskId}`, {
         method: 'PUT',
@@ -214,6 +219,8 @@ export default function Dashboard() {
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Error'
       showToast(message, 'err')
+    } finally {
+      setUpdatingTask(null)
     }
   }
 
@@ -543,15 +550,34 @@ export default function Dashboard() {
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
                         <span className={`badge badge-${task.priority}`}>{task.priority}</span>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <select
-                            value={task.status}
-                            onChange={e => handleStatusChange(task.id, e.target.value)}
-                            style={{ fontSize: '11px', background: 'var(--sand-100)', border: '1px solid var(--cream-300)', borderRadius: '8px', padding: '4px 8px', color: 'var(--mid-text)', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', fontWeight: 600 }}
-                          >
-                            <option value="todo">To Do</option>
-                            <option value="in_progress">In Progress</option>
-                            <option value="completed">Done ✓</option>
-                          </select>
+                          {/* Status dropdown with loader */}
+                          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                            <select
+                              value={task.status}
+                              disabled={updatingTask?.id === task.id && updatingTask?.field === 'status'}
+                              onChange={e => handleStatusChange(task.id, e.target.value)}
+                              style={{
+                                fontSize: '11px',
+                                background: 'var(--sand-100)',
+                                border: `1px solid ${updatingTask?.id === task.id && updatingTask?.field === 'status' ? 'var(--cream-500)' : 'var(--cream-300)'}`,
+                                borderRadius: '8px',
+                                padding: '4px 8px',
+                                color: 'var(--mid-text)',
+                                cursor: updatingTask?.id === task.id && updatingTask?.field === 'status' ? 'not-allowed' : 'pointer',
+                                fontFamily: 'DM Sans, sans-serif',
+                                fontWeight: 600,
+                                opacity: updatingTask?.id === task.id && updatingTask?.field === 'status' ? 0.55 : 1,
+                                transition: 'opacity 0.2s ease',
+                              }}
+                            >
+                              <option value="todo">To Do</option>
+                              <option value="in_progress">In Progress</option>
+                              <option value="completed">Done ✓</option>
+                            </select>
+                            {updatingTask?.id === task.id && updatingTask?.field === 'status' && (
+                              <Loader2 size={11} style={{ position: 'absolute', right: '-16px', stroke: 'var(--cream-600)', animation: 'spin 0.8s linear infinite' }} />
+                            )}
+                          </div>
                           {task.created_by === userProfile?.id && (
                             <button
                               onClick={() => handleDelete(task)}
@@ -594,31 +620,39 @@ export default function Dashboard() {
                           </span>
                         </div>
 
-                        {/* Assignee Select Dropdown */}
-                        <select
-                          value={task.assigned_to || ''}
-                          onChange={e => handleAssigneeChange(task.id, e.target.value)}
-                          style={{
-                            fontSize: '11px',
-                            background: 'var(--sand-100)',
-                            border: '1px solid var(--cream-300)',
-                            borderRadius: '999px',
-                            padding: '3px 8px 3px 6px',
-                            color: 'var(--mid-text)',
-                            cursor: 'pointer',
-                            fontFamily: 'DM Sans, sans-serif',
-                            fontWeight: 500,
-                            maxWidth: '120px',
-                            outline: 'none',
-                          }}
-                        >
-                          <option value="">Unassigned</option>
-                          {users.filter(u => u.id !== userProfile?.id).map(u => (
-                            <option key={u.id} value={u.id}>
-                              {u.full_name || u.email}
-                            </option>
-                          ))}
-                        </select>
+                        {/* Assignee Select Dropdown with loader */}
+                        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          {updatingTask?.id === task.id && updatingTask?.field === 'assignee' && (
+                            <Loader2 size={11} style={{ stroke: 'var(--cream-600)', animation: 'spin 0.8s linear infinite', flexShrink: 0 }} />
+                          )}
+                          <select
+                            value={task.assigned_to || ''}
+                            disabled={updatingTask?.id === task.id && updatingTask?.field === 'assignee'}
+                            onChange={e => handleAssigneeChange(task.id, e.target.value)}
+                            style={{
+                              fontSize: '11px',
+                              background: 'var(--sand-100)',
+                              border: `1px solid ${updatingTask?.id === task.id && updatingTask?.field === 'assignee' ? 'var(--cream-500)' : 'var(--cream-300)'}`,
+                              borderRadius: '999px',
+                              padding: '3px 8px 3px 6px',
+                              color: 'var(--mid-text)',
+                              cursor: updatingTask?.id === task.id && updatingTask?.field === 'assignee' ? 'not-allowed' : 'pointer',
+                              fontFamily: 'DM Sans, sans-serif',
+                              fontWeight: 500,
+                              maxWidth: '120px',
+                              outline: 'none',
+                              opacity: updatingTask?.id === task.id && updatingTask?.field === 'assignee' ? 0.55 : 1,
+                              transition: 'opacity 0.2s ease, border-color 0.2s ease',
+                            }}
+                          >
+                            <option value="">Unassigned</option>
+                            {users.filter(u => u.id !== userProfile?.id).map(u => (
+                              <option key={u.id} value={u.id}>
+                                {u.full_name || u.email}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
                     </div>
                   ))}
