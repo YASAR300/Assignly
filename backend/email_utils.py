@@ -10,10 +10,13 @@ load_dotenv()
 from config import Config
 
 def send_email(to_email, subject, html_content, text_content):
-    smtp_user = os.environ.get("SMTP_USER")
+    smtp_user     = os.environ.get("SMTP_USER")
     smtp_password = os.environ.get("SMTP_PASSWORD")
-    smtp_server = os.environ.get("SMTP_SERVER", "smtp.gmail.com")
-    smtp_port = int(os.environ.get("SMTP_PORT", 587))
+    smtp_server   = os.environ.get("SMTP_SERVER", "smtp-relay.brevo.com")
+    smtp_port     = int(os.environ.get("SMTP_PORT", 587))
+    # SMTP_FROM = actual sender email shown to recipients
+    # SMTP_USER = login credential (Brevo relay user, different from sender)
+    smtp_from     = os.environ.get("SMTP_FROM") or smtp_user
     
     if not smtp_user or not smtp_password:
         print("SMTP email configuration is missing or incomplete in .env.")
@@ -22,23 +25,23 @@ def send_email(to_email, subject, html_content, text_content):
     try:
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
-        msg["From"] = f"Assignly App <{smtp_user}>"
-        msg["To"] = to_email
+        msg["From"]    = f"Assignly App <{smtp_from}>"
+        msg["To"]      = to_email
         
         part1 = MIMEText(text_content, "plain")
         part2 = MIMEText(html_content, "html")
         msg.attach(part1)
         msg.attach(part2)
         
-        server = smtplib.SMTP(smtp_server, smtp_port, timeout=5)
+        server = smtplib.SMTP(smtp_server, smtp_port, timeout=10)
         server.starttls()
         server.login(smtp_user, smtp_password)
-        server.sendmail(smtp_user, to_email, msg.as_string())
+        server.sendmail(smtp_from, to_email, msg.as_string())
         server.quit()
         print(f"Email successfully sent to {to_email}")
         return True
     except Exception as e:
-        print(f"Failed to send email to {to_email}: {str(e)}")
+        print(f"Failed to send email to {to_email}: {str(e)}") 
         return False
 
 def get_task_created_template(task_title, task_description, creator_name, assignee_name, due_date, priority):

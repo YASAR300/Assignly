@@ -20,8 +20,9 @@ class Config:
     # SMTP
     SMTP_USER     = os.environ.get("SMTP_USER")
     SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD")
-    SMTP_SERVER   = os.environ.get("SMTP_SERVER", "smtp.gmail.com")
+    SMTP_SERVER   = os.environ.get("SMTP_SERVER", "smtp-relay.brevo.com")
     SMTP_PORT     = int(os.environ.get("SMTP_PORT", 587))
+    SMTP_FROM     = os.environ.get("SMTP_FROM") or os.environ.get("SMTP_USER")
 
     # CORS
     raw_frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3000")
