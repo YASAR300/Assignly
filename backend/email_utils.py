@@ -447,3 +447,152 @@ def get_task_completed_template(task_title, task_description, creator_name, assi
     </html>
     """
     return html_content, text_content
+
+
+def get_teammate_invited_template(inviter_name, invitee_name, join_url):
+    text_content = f"""
+    Hi {invitee_name},
+    
+    Great news! {inviter_name} has invited you to join the team workspace on Assignly.
+    
+    Assignly is a beautiful, calm, and productive workspace for your team to assign, track, and complete tasks with ease.
+    
+    If you don't have an account yet, please sign up by clicking the link below:
+    {join_url}
+    
+    Best regards,
+    Team Assignly
+    """
+    
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+            body {{
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                background-color: #FAF6EE;
+                color: #2E2514;
+                margin: 0;
+                padding: 40px 16px;
+            }}
+            .container {{
+                max-width: 580px;
+                margin: 0 auto;
+                background-color: #FDFBF7;
+                border-radius: 24px;
+                overflow: hidden;
+                box-shadow: 0 16px 40px rgba(60,35,10,0.06);
+                border: 1px solid #E8DCC4;
+            }}
+            .header {{
+                background-color: #FAF6EE;
+                border-bottom: 1px solid #E8DCC4;
+                padding: 32px;
+                text-align: center;
+            }}
+            .header-logo {{
+                font-size: 20px;
+                font-weight: 700;
+                color: #7A6037;
+                letter-spacing: -0.3px;
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+            }}
+            .content {{
+                padding: 40px 32px;
+            }}
+            .greeting {{
+                font-size: 20px;
+                font-weight: 600;
+                margin-top: 0;
+                margin-bottom: 12px;
+                color: #2E2514;
+                letter-spacing: -0.2px;
+            }}
+            .intro {{
+                font-size: 15px;
+                color: #61533B;
+                line-height: 1.6;
+                margin-bottom: 28px;
+            }}
+            .card {{
+                background-color: #FDF6E2;
+                border: 1px solid #EDD9B8;
+                border-radius: 18px;
+                padding: 28px;
+                margin-bottom: 32px;
+                text-align: center;
+            }}
+            .card-title {{
+                font-size: 18px;
+                font-weight: 700;
+                color: #7A6037;
+                margin: 0 0 12px 0;
+                line-height: 1.4;
+            }}
+            .card-desc {{
+                font-size: 14px;
+                color: #61533B;
+                line-height: 1.6;
+                margin: 0;
+            }}
+            .btn-container {{
+                text-align: center;
+                margin-top: 8px;
+            }}
+            .btn {{
+                display: inline-block;
+                background-color: #C9A96E;
+                color: #FAF6EE !important;
+                text-decoration: none;
+                padding: 14px 32px;
+                font-size: 14px;
+                font-weight: 600;
+                border-radius: 14px;
+                box-shadow: 0 4px 12px rgba(201,169,110,0.25);
+                transition: transform 0.2s ease;
+            }}
+            .footer {{
+                background-color: #FAF6EE;
+                padding: 28px;
+                text-align: center;
+                border-top: 1px solid #E8DCC4;
+                font-size: 11px;
+                color: #8A7550;
+                line-height: 1.5;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <div class="header-logo">
+                    <span style="color: #C9A96E;">✨</span> Assignly
+                </div>
+            </div>
+            <div class="content">
+                <p class="greeting">Hi {invitee_name},</p>
+                <p class="intro">Great news! <strong>{inviter_name}</strong> has invited you to join their collaborative team workspace on Assignly.</p>
+                
+                <div class="card">
+                    <h3 class="card-title">You're Invited!</h3>
+                    <p class="card-desc">Assignly is a beautiful, calm, and productive workspace for your team to assign, track, and complete tasks with ease.</p>
+                </div>
+                
+                <div class="btn-container">
+                    <a href="{join_url}" class="btn">Join Workspace & Create Account</a>
+                </div>
+            </div>
+            <div class="footer">
+                <p>If you already have an account, clicking the button will take you directly to your dashboard.<br>&copy; 2026 Assignly. All rights reserved.</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    return html_content, text_content
+
