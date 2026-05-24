@@ -1,5 +1,5 @@
 import os
-import jwt
+import requests as http_requests
 from flask import Flask, request, jsonify, g
 from flask_cors import CORS
 from functools import wraps
@@ -11,13 +11,22 @@ from email_utils import send_email, get_task_created_template, get_task_complete
 app = Flask(__name__)
 app.config.from_object(Config)
 
-# Enable CORS for the frontend URL
-CORS(app, resources={r"/api/*": {"origins": [app.config["FRONTEND_URL"], "http://localhost:3000"]}})
+# ── CORS ──────────────────────────────────────────────────────────────────────
+CORS(app, resources={
+    r"/api/*": {
+        "origins": [
+            app.config["FRONTEND_URL"],
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+        ],
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"],
+    }
+})
 
-# Initialize database
 db.init_app(app)
 
-# Helper function to parse ISO date strings from frontend
+# ── Helpers ───────────────────────────────────────────────────────────────────
 def parse_iso_datetime(date_str):
     if not date_str:
         return None
@@ -25,234 +34,296 @@ def parse_iso_datetime(date_str):
         if date_str.endswith('Z'):
             date_str = date_str[:-1] + '+00:00'
         return datetime.fromisoformat(date_str)
-    except Exception as e:
-        print(f"Error parsing date {date_str}: {str(e)}")
+    except Exception:
         return None
 
-# Middleware decorator to require and verify Supabase JWT
+
+def verify_supabase_token(token: str):
+    """
+    Verify an access token by calling Supabase's /auth/v1/user endpoint.
+    Returns the user dict on success, or None on failure.
+    This approach works regardless of which JWT secret format Supabase uses.
+    """
+    supabase_url  = app.config.get("SUPABASE_URL", "").rstrip("/")
+    supabase_anon = app.config.get("SUPABASE_ANON_KEY", "")
+
+    if not supabase_url:
+        return None
+
+    try:
+        resp = http_requests.get(
+            f"{supabase_url}/auth/v1/user",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "apikey": supabase_anon,
+            },
+            timeout=8,
+        )
+        if resp.status_code == 200:
+            return resp.json()
+        return None
+    except Exception as e:
+        print(f"[Auth] Supabase token verification failed: {e}")
+        return None
+
+
+# ── Auth Decorator ────────────────────────────────────────────────────────────
 def require_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        auth_header = request.headers.get("Authorization")
-        if not auth_header:
-            return jsonify({"error": "Authorization header is missing"}), 401
-            
+        auth_header = request.headers.get("Authorization", "")
         parts = auth_header.split()
-        if len(parts) != 2 or parts[0].lower() != 'bearer':
-            return jsonify({"error": "Authorization header must be in 'Bearer <token>' format"}), 401
-            
+
+        if len(parts) != 2 or parts[0].lower() != "bearer":
+            return jsonify({"error": "Authorization header must be 'Bearer <token>'"}), 401
+
         token = parts[1]
-        
+        user_data = verify_supabase_token(token)
+
+        if not user_data:
+            return jsonify({"error": "Invalid or expired token. Please log in again."}), 401
+
+        g.user_id    = user_data.get("id")
+        g.user_email = user_data.get("email")
+        meta         = user_data.get("user_metadata", {})
+
+        # Upsert profile in our DB (handles first-time login edge cases)
         try:
-            # Supabase JWTs are signed with HS256 and use SUPABASE_JWT_SECRET
-            jwt_secret = app.config["SUPABASE_JWT_SECRET"]
-            if not jwt_secret:
-                return jsonify({"error": "Supabase JWT secret is not configured on the backend"}), 500
-                
-            # Decode the token
-            payload = jwt.decode(token, jwt_secret, algorithms=["HS256"], audience="authenticated")
-            
-            # Store user information in flask global context (g)
-            g.user_id = payload.get("sub")
-            g.user_email = payload.get("email")
-            
-            # Verify profile exists in public.profiles.
-            # If not, create it dynamically (fallback in case trigger has a delay)
             profile = Profile.query.get(g.user_id)
             if not profile:
                 profile = Profile(
-                    id=g.user_id,
-                    email=g.user_email,
-                    full_name=payload.get("user_metadata", {}).get("full_name") or payload.get("user_metadata", {}).get("name") or "User",
-                    avatar_url=payload.get("user_metadata", {}).get("avatar_url") or payload.get("user_metadata", {}).get("picture") or ""
+                    id         = g.user_id,
+                    email      = g.user_email,
+                    full_name  = meta.get("full_name") or meta.get("name") or "User",
+                    avatar_url = meta.get("avatar_url") or meta.get("picture") or "",
                 )
                 db.session.add(profile)
                 db.session.commit()
-                
-        except jwt.ExpiredSignatureError:
-            return jsonify({"error": "Token has expired"}), 401
-        except jwt.InvalidTokenError as e:
-            return jsonify({"error": f"Invalid token: {str(e)}"}), 401
         except Exception as e:
-            return jsonify({"error": f"Authentication failed: {str(e)}"}), 401
-            
+            db.session.rollback()
+            print(f"[Auth] Profile upsert error: {e}")
+
         return f(*args, **kwargs)
     return decorated
 
-@app.route("/api/health", methods=["GET"])
-def health_check():
-    return jsonify({"status": "healthy", "time": datetime.utcnow().isoformat()}), 200
 
-# Endpoint to list all profiles (for assignee dropdown list)
+# ── Routes ────────────────────────────────────────────────────────────────────
+
+@app.route("/api/health", methods=["GET"])
+def health():
+    return jsonify({"status": "ok", "time": datetime.utcnow().isoformat()}), 200
+
+
 @app.route("/api/users", methods=["GET"])
 @require_auth
 def get_users():
     try:
-        users = Profile.query.all()
-        return jsonify([user.to_dict() for user in users]), 200
+        users = Profile.query.order_by(Profile.full_name).all()
+        return jsonify([u.to_dict() for u in users]), 200
     except Exception as e:
-        return jsonify({"error": f"Failed to retrieve users: {str(e)}"}), 500
+        return jsonify({"error": str(e)}), 500
 
-# Endpoint to fetch tasks (optionally filtered by created_by or assigned_to)
+
+@app.route("/api/users", methods=["POST"])
+@require_auth
+def add_user():
+    import uuid
+    data = request.json or {}
+    email = data.get("email", "").strip()
+    full_name = data.get("full_name", "").strip() or "Team Member"
+    
+    if not email:
+        return jsonify({"error": "Email is required"}), 400
+        
+    try:
+        profile = Profile.query.filter_by(email=email).first()
+        if profile:
+            return jsonify(profile.to_dict()), 200
+            
+        new_id = uuid.uuid4()
+        profile = Profile(
+            id=new_id,
+            email=email,
+            full_name=full_name,
+            avatar_url="",
+        )
+        db.session.add(profile)
+        db.session.commit()
+        return jsonify(profile.to_dict()), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/tasks", methods=["GET"])
 @require_auth
 def get_tasks():
     try:
-        # Return all tasks representing a general dashboard workspace
         tasks = Task.query.order_by(Task.created_at.desc()).all()
-        return jsonify([task.to_dict() for task in tasks]), 200
+        return jsonify([t.to_dict() for t in tasks]), 200
     except Exception as e:
-        return jsonify({"error": f"Failed to retrieve tasks: {str(e)}"}), 500
+        return jsonify({"error": str(e)}), 500
 
-# Endpoint to create a task
+
 @app.route("/api/tasks", methods=["POST"])
 @require_auth
 def create_task():
-    data = request.json
-    if not data or not data.get("title"):
+    data = request.json or {}
+    if not data.get("title", "").strip():
         return jsonify({"error": "Task title is required"}), 400
-        
+
     try:
-        due_date_parsed = parse_iso_datetime(data.get("due_date"))
-        
-        # Create Task
-        new_task = Task(
-            title=data.get("title"),
-            description=data.get("description"),
-            status=data.get("status", "todo"),
-            priority=data.get("priority", "medium"),
-            due_date=due_date_parsed,
-            created_by=g.user_id,
-            assigned_to=data.get("assigned_to") # can be None
+        task = Task(
+            title       = data["title"].strip(),
+            description = data.get("description", "").strip() or None,
+            status      = data.get("status", "todo"),
+            priority    = data.get("priority", "medium"),
+            due_date    = parse_iso_datetime(data.get("due_date")),
+            created_by  = g.user_id,
+            assigned_to = data.get("assigned_to") or None,
         )
-        
-        db.session.add(new_task)
+        db.session.add(task)
         db.session.commit()
-        
-        # Load relationships for emails
-        creator = Profile.query.get(g.user_id)
-        assignee = None
-        if new_task.assigned_to:
-            assignee = Profile.query.get(new_task.assigned_to)
-            
-        # Send Email Notification to assignee if assigned to someone else
+
+        # Email notification ──────────────────────────────
+        creator  = Profile.query.get(g.user_id)
+        assignee = Profile.query.get(task.assigned_to) if task.assigned_to else None
+
         if assignee and assignee.email:
-            formatted_due = due_date_parsed.strftime("%Y-%m-%d %H:%M") if due_date_parsed else "No due date set"
+            formatted_due = (
+                task.due_date.strftime("%d %b %Y, %H:%M")
+                if task.due_date else "No due date set"
+            )
             html, text = get_task_created_template(
-                task_title=new_task.title,
-                task_description=new_task.description,
-                creator_name=creator.full_name or creator.email,
-                assignee_name=assignee.full_name or assignee.email,
-                due_date=formatted_due,
-                priority=new_task.priority
+                task_title       = task.title,
+                task_description = task.description,
+                creator_name     = creator.full_name or creator.email,
+                assignee_name    = assignee.full_name or assignee.email,
+                due_date         = formatted_due,
+                priority         = task.priority,
             )
-            
-            # Send the email in a robust, simple call
             send_email(
-                to_email=assignee.email,
-                subject=f"New Task Assigned: {new_task.title}",
-                html_content=html,
-                text_content=text
+                to_email     = assignee.email,
+                subject      = f"📋 New Task Assigned: {task.title}",
+                html_content = html,
+                text_content = text,
             )
-            
-        return jsonify(new_task.to_dict()), 201
+
+        return jsonify(task.to_dict()), 201
+
     except Exception as e:
         db.session.rollback()
-        return jsonify({"error": f"Failed to create task: {str(e)}"}), 500
+        return jsonify({"error": str(e)}), 500
 
-# Endpoint to update a task (status, priority, assignment, details)
+
 @app.route("/api/tasks/<uuid:task_id>", methods=["PUT"])
 @require_auth
 def update_task(task_id):
-    task = Task.query.get(task_id)
+    task = Task.query.get(str(task_id))
     if not task:
         return jsonify({"error": "Task not found"}), 404
-        
-    data = request.json
-    if not data:
-        return jsonify({"error": "No update payload provided"}), 400
-        
+
+    data = request.json or {}
+    old_status = task.status
+    old_assignee = task.assigned_to
+
     try:
-        old_status = task.status
-        new_status = data.get("status", task.status)
-        
-        # Update fields if provided
-        if "title" in data:
-            task.title = data["title"]
-        if "description" in data:
-            task.description = data["description"]
-        if "status" in data:
-            task.status = data["status"]
-        if "priority" in data:
-            task.priority = data["priority"]
-        if "due_date" in data:
-            task.due_date = parse_iso_datetime(data["due_date"])
-        if "assigned_to" in data:
-            task.assigned_to = data["assigned_to"]
-            
+        if "title"       in data: task.title       = data["title"]
+        if "description" in data: task.description = data["description"]
+        if "status"      in data: task.status       = data["status"]
+        if "priority"    in data: task.priority     = data["priority"]
+        if "due_date"    in data: task.due_date     = parse_iso_datetime(data["due_date"])
+        if "assigned_to" in data: task.assigned_to  = data["assigned_to"] or None
+
         task.updated_at = datetime.utcnow()
         db.session.commit()
-        
-        # If status transitioned to completed, trigger notification emails!
-        if old_status != "completed" and new_status == "completed":
-            creator = Profile.query.get(task.created_by)
-            assignee = Profile.query.get(task.assigned_to) if task.assigned_to else None
+
+        # Send assignment notification if assignee changed ───
+        if "assigned_to" in data and str(old_assignee) != str(task.assigned_to) and task.assigned_to:
+            creator  = Profile.query.get(task.created_by)
+            assignee = Profile.query.get(task.assigned_to)
+            if assignee and assignee.email:
+                formatted_due = (
+                    task.due_date.strftime("%d %b %Y, %H:%M")
+                    if task.due_date else "No due date set"
+                )
+                html, text = get_task_created_template(
+                    task_title       = task.title,
+                    task_description = task.description,
+                    creator_name     = creator.full_name or creator.email if creator else "Collaborator",
+                    assignee_name    = assignee.full_name or assignee.email,
+                    due_date         = formatted_due,
+                    priority         = task.priority,
+                )
+                send_email(
+                    to_email     = assignee.email,
+                    subject      = f"📋 Task Assigned: {task.title}",
+                    html_content = html,
+                    text_content = text,
+                )
+
+        # Send completion emails ──────────────────────────
+        if old_status != "completed" and task.status == "completed":
+            creator      = Profile.query.get(task.created_by)
+            assignee     = Profile.query.get(task.assigned_to) if task.assigned_to else None
             completed_by = Profile.query.get(g.user_id)
-            
-            creator_name = creator.full_name or creator.email if creator else "Creator"
-            assignee_name = assignee.full_name or assignee.email if assignee else "Unassigned"
+
+            creator_name     = creator.full_name      or creator.email      if creator      else "Creator"
+            assignee_name    = assignee.full_name     or assignee.email     if assignee     else "Unassigned"
             completed_by_name = completed_by.full_name or completed_by.email if completed_by else "User"
-            
+
             html, text = get_task_completed_template(
-                task_title=task.title,
-                task_description=task.description,
-                creator_name=creator_name,
-                assignee_name=assignee_name,
-                completed_by_name=completed_by_name
+                task_title       = task.title,
+                task_description = task.description,
+                creator_name     = creator_name,
+                assignee_name    = assignee_name,
+                completed_by_name = completed_by_name,
             )
-            
-            # 1. Notify Creator
-            if creator and creator.email:
-                send_email(
-                    to_email=creator.email,
-                    subject=f"Task Completed: {task.title}",
-                    html_content=html,
-                    text_content=text
-                )
-                
-            # 2. Notify Assignee (if different from Creator)
-            if assignee and assignee.email and assignee.id != creator.id:
-                send_email(
-                    to_email=assignee.email,
-                    subject=f"Task Completed: {task.title}",
-                    html_content=html,
-                    text_content=text
-                )
-                
+
+            emails_sent = set()
+            for target in [creator, assignee]:
+                if target and target.email and target.email not in emails_sent:
+                    send_email(
+                        to_email     = target.email,
+                        subject      = f"✅ Task Completed: {task.title}",
+                        html_content = html,
+                        text_content = text,
+                    )
+                    emails_sent.add(target.email)
+
         return jsonify(task.to_dict()), 200
+
     except Exception as e:
         db.session.rollback()
-        return jsonify({"error": f"Failed to update task: {str(e)}"}), 500
+        return jsonify({"error": str(e)}), 500
 
-# Endpoint to delete a task (creator only)
+
 @app.route("/api/tasks/<uuid:task_id>", methods=["DELETE"])
 @require_auth
 def delete_task(task_id):
-    task = Task.query.get(task_id)
+    task = Task.query.get(str(task_id))
     if not task:
         return jsonify({"error": "Task not found"}), 404
-        
-    # Check authorization: only the creator can delete the task
+
     if str(task.created_by) != str(g.user_id):
-        return jsonify({"error": "Only the task creator is authorized to delete this task"}), 403
-        
+        return jsonify({"error": "Only the creator can delete this task"}), 403
+
     try:
         db.session.delete(task)
         db.session.commit()
-        return jsonify({"message": "Task successfully deleted"}), 200
+        return jsonify({"message": "Task deleted"}), 200
     except Exception as e:
         db.session.rollback()
-        return jsonify({"error": f"Failed to delete task: {str(e)}"}), 500
+        return jsonify({"error": str(e)}), 500
 
+
+# ── Entry point ───────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=True)
+    with app.app_context():
+        # Reflect existing tables — don't recreate them
+        db.engine.connect()
+    app.run(
+        host  = "0.0.0.0",
+        port  = int(os.environ.get("PORT", 5000)),
+        debug = True,
+    )
