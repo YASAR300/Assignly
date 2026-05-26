@@ -34,99 +34,121 @@ SANDBOX_TEMPLATES = {
     "model_closeup": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=800"
 }
 
-def remove_background_smart(img: Image.Image, tolerance: int = 40, keying_tolerance: int = 70) -> Image.Image:
+def remove_background_smart(img: Image.Image, tolerance: int = 40) -> Image.Image:
     """
-    Advanced, dependency-free background removal combining border-based flood-fill
-    with global color-keying for isolated background islands (like bokeh lights).
+    State-of-the-art, dependency-free background removal.
+    Dynamically detects the background color type (Green, Red, Blue, or Grayscale)
+    and applies optimized extraction to cleanly isolate the product without artifacts.
     """
     import collections
     img = img.convert("RGBA")
     w, h = img.size
     pixels = img.load()
     
-    # 1. Sample border colors to get background color palette
+    # 1. Sample border pixels to determine the background color profile
     border_colors = []
-    # Sample top & bottom borders
-    for x in range(0, w, 10):
+    for x in range(0, w, 15):
         border_colors.append(pixels[x, 0][:3])
         border_colors.append(pixels[x, h - 1][:3])
-    # Sample left & right borders
-    for y in range(0, h, 10):
+    for y in range(0, h, 15):
         border_colors.append(pixels[0, y][:3])
         border_colors.append(pixels[w - 1, y][:3])
         
-    # Keep only unique background colors
-    unique_bg_colors = []
-    for c in border_colors:
-        if not any(sum(abs(c[i] - uc[i]) for i in range(3)) < 15 for uc in unique_bg_colors):
-            unique_bg_colors.append(c)
-            
-    # 2. Perform border-based flood fill (Queue-based BFS)
-    # Start queue with all border pixels
-    queue = collections.deque()
-    visited = set()
+    avg_r = sum(c[0] for c in border_colors) / len(border_colors)
+    avg_g = sum(c[1] for c in border_colors) / len(border_colors)
+    avg_b = sum(c[2] for c in border_colors) / len(border_colors)
+    
+    # Check if the background is highly colorful (high chroma)
+    max_channel_diff = max(abs(avg_r - avg_g), abs(avg_g - avg_b), abs(avg_b - avg_r))
+    
     mask = Image.new("L", (w, h), 255)
     mask_pixels = mask.load()
     
-    # Add top and bottom borders to queue
-    for x in range(w):
-        queue.append((x, 0))
-        queue.append((x, h - 1))
-        visited.add((x, 0))
-        visited.add((x, h - 1))
-    # Add left and right borders to queue
-    for y in range(h):
-        queue.append((0, y))
-        queue.append((w - 1, y))
-        visited.add((0, y))
-        visited.add((w - 1, y))
-        
-    while queue:
-        cx, cy = queue.popleft()
-        mask_pixels[cx, cy] = 0
-        c_color = pixels[cx, cy][:3]
-        
-        # Check neighbors
-        for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
-            nx, ny = cx + dx, cy + dy
-            if 0 <= nx < w and 0 <= ny < h and (nx, ny) not in visited:
-                n_color = pixels[nx, ny][:3]
-                
-                # Check similarity to current pixel color
-                dist_prev = ((n_color[0] - c_color[0]) ** 2 +
-                             (n_color[1] - c_color[1]) ** 2 +
-                             (n_color[2] - c_color[2]) ** 2) ** 0.5
-                             
-                # Also check similarity to ANY of the unique border colors
-                min_bg_dist = min(
-                    ((n_color[0] - bg[0]) ** 2 +
-                     (n_color[1] - bg[1]) ** 2 +
-                     (n_color[2] - bg[2]) ** 2) ** 0.5
-                    for bg in unique_bg_colors
-                )
-                
-                if dist_prev <= tolerance or min_bg_dist <= tolerance:
-                    visited.add((nx, ny))
-                    queue.append((nx, ny))
-                    
-    # 3. Clean up remaining disconnected background islands (like floating bokeh lights)
-    # For any pixel not visited, if it is highly similar to background, remove it!
-    for y in range(h):
-        for x in range(w):
-            if mask_pixels[x, y] == 255:
+    # ── CASE A: Green Background (e.g. green bokeh, green studio) ──
+    if max_channel_diff > 18 and avg_g > avg_r and avg_g > avg_b:
+        print("[AI Studio] Green background detected. Applying chroma-key extraction...")
+        for y in range(h):
+            for x in range(w):
                 r, g, b, a = pixels[x, y]
-                min_bg_dist = min(
-                    ((r - bg[0]) ** 2 +
-                     (g - bg[1]) ** 2 +
-                     (b - bg[2]) ** 2) ** 0.5
-                    for bg in unique_bg_colors
-                )
-                
-                # If pixel matches background color very closely, make it transparent
-                if min_bg_dist < keying_tolerance:
+                is_bg = (g > r + 10 and g > b + 10) or \
+                        (((r - avg_r)**2 + (g - avg_g)**2 + (b - avg_b)**2)**0.5 < 65)
+                # Keep metallic silver/white diamonds safe: they have low saturation
+                is_neutral = abs(r - g) < 15 and abs(g - b) < 15 and abs(b - r) < 15
+                if is_bg and not (is_neutral and g > 150):
                     mask_pixels[x, y] = 0
                     
-    # 4. Smooth the edges of the mask
+    # ── CASE B: Red/Orange Background (e.g. sunset, warm studio) ──
+    elif max_channel_diff > 18 and avg_r > avg_g and avg_r > avg_b:
+        print("[AI Studio] Red/Orange background detected. Applying chroma-key extraction...")
+        for y in range(h):
+            for x in range(w):
+                r, g, b, a = pixels[x, y]
+                is_bg = (r > g + 15 and r > b + 15) or \
+                        (((r - avg_r)**2 + (g - avg_g)**2 + (b - avg_b)**2)**0.5 < 65)
+                is_neutral = abs(r - g) < 15 and abs(g - b) < 15 and abs(b - r) < 15
+                if is_bg and not (is_neutral and r > 150):
+                    mask_pixels[x, y] = 0
+                    
+    # ── CASE C: Blue Background (e.g. blue velvet, blue studio) ──
+    elif max_channel_diff > 18 and avg_b > avg_r and avg_b > avg_g:
+        print("[AI Studio] Blue background detected. Applying chroma-key extraction...")
+        for y in range(h):
+            for x in range(w):
+                r, g, b, a = pixels[x, y]
+                is_bg = (b > r + 15 and b > g + 15) or \
+                        (((r - avg_r)**2 + (g - avg_g)**2 + (b - avg_b)**2)**0.5 < 65)
+                is_neutral = abs(r - g) < 15 and abs(g - b) < 15 and abs(b - r) < 15
+                if is_bg and not (is_neutral and b > 150):
+                    mask_pixels[x, y] = 0
+                    
+    # ── CASE D: Neutral Background (White, Grey, Black) ──
+    else:
+        print("[AI Studio] Grayscale/Neutral background detected. Applying border BFS flood-fill...")
+        # Queue-based BFS starting from all borders
+        queue = collections.deque()
+        visited = set()
+        
+        for x in range(w):
+            queue.append((x, 0))
+            queue.append((x, h - 1))
+            visited.add((x, 0))
+            visited.add((x, h - 1))
+        for y in range(h):
+            queue.append((0, y))
+            queue.append((w - 1, y))
+            visited.add((0, y))
+            visited.add((w - 1, y))
+            
+        unique_bg = []
+        for c in border_colors:
+            if not any(sum(abs(c[i] - uc[i]) for i in range(3)) < 15 for uc in unique_bg):
+                unique_bg.append(c)
+                
+        while queue:
+            cx, cy = queue.popleft()
+            mask_pixels[cx, cy] = 0
+            c_color = pixels[cx, cy][:3]
+            
+            for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                nx, ny = cx + dx, cy + dy
+                if 0 <= nx < w and 0 <= ny < h and (nx, ny) not in visited:
+                    n_color = pixels[nx, ny][:3]
+                    dist_prev = ((n_color[0] - c_color[0]) ** 2 +
+                                 (n_color[1] - c_color[1]) ** 2 +
+                                 (n_color[2] - c_color[2]) ** 2) ** 0.5
+                    
+                    min_bg_dist = min(
+                        ((n_color[0] - bg[0]) ** 2 +
+                         (n_color[1] - bg[1]) ** 2 +
+                         (n_color[2] - bg[2]) ** 2) ** 0.5
+                        for bg in unique_bg
+                    )
+                    
+                    if dist_prev <= tolerance or min_bg_dist <= tolerance:
+                        visited.add((nx, ny))
+                        queue.append((nx, ny))
+                        
+    # 4. Feather and smooth edges
     mask = mask.filter(ImageFilter.GaussianBlur(0.8))
     img.putalpha(mask)
     return img
@@ -145,7 +167,7 @@ def remove_background(img_data: bytes) -> Image.Image:
         print(f"[AI Studio] rembg extraction failed or not installed ({e}). Using advanced smart fallback...")
         try:
             img = Image.open(io.BytesIO(img_data)).convert("RGBA")
-            return remove_background_smart(img, tolerance=40, keying_tolerance=70)
+            return remove_background_smart(img, tolerance=40)
         except Exception as fallback_err:
             print(f"[AI Studio] Advanced smart fallback also failed: {fallback_err}. Using absolute thresholding fallback.")
             try:
