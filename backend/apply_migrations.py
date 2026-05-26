@@ -13,24 +13,29 @@ def apply_migrations():
         
     print("Connecting to Supabase PostgreSQL database...")
     try:
-        conn = psycopg2.connect(db_url)
-        conn.autocommit = True
-        cursor = conn.cursor()
+        # Paths to migrations
+        migrations_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "migrations"))
+        migration_files = sorted([f for f in os.listdir(migrations_dir) if f.endswith(".sql")])
         
-        # Read the migration SQL file
-        migration_file = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "migrations", "01_init_schema.sql"))
-        print(f"Reading migration file: {migration_file}")
-        with open(migration_file, "r") as f:
-            sql = f.read()
+        for file_name in migration_files:
+            file_path = os.path.join(migrations_dir, file_name)
+            print(f"\n--- Processing: {file_name} ---")
+            with open(file_path, "r", encoding="utf-8") as f:
+                sql = f.read()
+                
+            print(f"Applying migration to Supabase...")
+            try:
+                with psycopg2.connect(db_url) as file_conn:
+                    with file_conn.cursor() as cursor:
+                        cursor.execute(sql)
+                print(f"Migration {file_name} successfully checked/applied!")
+            except Exception as file_err:
+                print(f"Notice/Error applying {file_name}: {str(file_err)}")
+                print("Continuing to next migration...")
             
-        print("Applying migrations on Supabase...")
-        cursor.execute(sql)
-        print("Migrations successfully applied! Tables and triggers are now live on Supabase.")
-        
-        cursor.close()
-        conn.close()
+        print("\nAll migration checks completed.")
     except Exception as e:
-        print(f"Failed to apply migrations: {str(e)}")
+        print(f"Failed to connect or apply migrations: {str(e)}")
 
 if __name__ == "__main__":
     apply_migrations()
