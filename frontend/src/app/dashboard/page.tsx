@@ -363,27 +363,35 @@ export default function Dashboard() {
     const file = files[0]
     setUploadingImage(true)
     
-    const formData = new FormData()
-    formData.append('file', file)
-    
     try {
-      const res = await fetch(`${baseUrl}/api/upload`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session?.access_token}`,
-        },
-        body: formData
-      })
-      if (!res.ok) throw new Error('File upload failed')
-      const data = await res.json()
-      setForm(f => ({ ...f, product_image_url: data.url }))
-      toast.success('Product photo uploaded successfully!')
-    } catch {
-      toast.error('Failed to upload product photo.')
+      const fileExt = file.name.split('.').pop() || 'jpg'
+      const fileName = `prod_${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`
+      
+      const { data, error } = await supabase.storage
+        .from('product-images')
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: false
+        })
+        
+      if (error) {
+        throw error
+      }
+      
+      const { data: { publicUrl } } = supabase.storage
+        .from('product-images')
+        .getPublicUrl(fileName)
+        
+      setForm(f => ({ ...f, product_image_url: publicUrl }))
+      toast.success('Product photo uploaded successfully to Supabase!')
+    } catch (err: any) {
+      console.error('Upload error:', err)
+      toast.error(err.message || 'Failed to upload product photo.')
     } finally {
       setUploadingImage(false)
     }
   }
+
 
   // ── Actions ──────────────────────────────────────
   const handleCreate = async (e: React.FormEvent) => {

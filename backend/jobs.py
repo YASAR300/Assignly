@@ -328,6 +328,30 @@ def composite_images(bg_img: Image.Image, product_png: Image.Image, image_type: 
     
     return bg_img.convert("RGB")
 
+def upload_to_supabase_storage(bucket_name: str, file_path: str, file_bytes: bytes, content_type: str = "image/jpeg") -> str:
+    """
+    Uploads a file to a Supabase Storage bucket and returns its public URL.
+    """
+    supabase_url = os.environ.get("SUPABASE_URL", "").rstrip("/")
+    supabase_anon = os.environ.get("SUPABASE_ANON_KEY", "")
+    
+    if not supabase_url or not supabase_anon:
+        raise Exception("Supabase configuration missing (SUPABASE_URL / SUPABASE_ANON_KEY)")
+        
+    upload_url = f"{supabase_url}/storage/v1/object/{bucket_name}/{file_path}"
+    headers = {
+        "Authorization": f"Bearer {supabase_anon}",
+        "apikey": supabase_anon,
+        "Content-Type": content_type
+    }
+    
+    resp = requests.post(upload_url, headers=headers, data=file_bytes, timeout=30)
+    if resp.status_code != 200:
+        raise Exception(f"Supabase Storage upload failed: HTTP {resp.status_code} - {resp.text}")
+        
+    public_url = f"{supabase_url}/storage/v1/object/public/{bucket_name}/{file_path}"
+    return public_url
+
 def run_image_generation_task(task_id: str, image_type: str, prompt: str, job_id: str, user_id: str):
     """
     Executes the background image generation job.
@@ -373,16 +397,24 @@ def run_image_generation_task(task_id: str, image_type: str, prompt: str, job_id
             final_img = composite_images(bg_img, product_alpha_png, image_type)
             JOBS[job_id]["progress"] = 90
             
-            # 6. Save final image to local public directory
+            # 6. Save final image to local public directory and upload to Supabase Storage
             filename = f"gen_{task_id}_{image_type}_{uuid.uuid4().hex[:8]}.jpg"
             save_path = os.path.join(STATIC_GENERATED_DIR, filename)
             final_img.save(save_path, "JPEG", quality=92)
             
-            # Formulate public URL (assuming backend address is accessible)
-            # We will use a relative route or combine with request host in view layer, but storing local static path is standard
-            backend_url = os.environ.get("BACKEND_URL", "http://localhost:5000").rstrip("/")
-            public_url = f"{backend_url}/static/generated/{filename}"
-            print(f"[Background Job] Composed image saved: {public_url}")
+            # Read saved image bytes for upload
+            with open(save_path, "rb") as f:
+                image_bytes = f.read()
+                
+            try:
+                print(f"[Background Job] Uploading generated image to Supabase Storage...")
+                public_url = upload_to_supabase_storage("generated-images", filename, image_bytes)
+                print(f"[Background Job] Composed image uploaded to Supabase: {public_url}")
+            except Exception as upload_err:
+                print(f"[Background Job] Supabase upload failed ({upload_err}). Falling back to local backend URL.")
+                backend_url = os.environ.get("BACKEND_URL", "http://localhost:5000").rstrip("/")
+                public_url = f"{backend_url}/static/generated/{filename}"
+                print(f"[Background Job] Composed image saved locally: {public_url}")
             
             # 7. Write to database table 'generated_images'
             angle = None
