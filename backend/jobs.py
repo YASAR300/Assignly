@@ -72,13 +72,70 @@ def remove_background(img_data: bytes) -> Image.Image:
 def generate_background_via_api(prompt: str, image_type: str) -> Image.Image:
     """
     Tries to generate a background using AI image generation APIs based on configured tokens.
-    Falls back to curated beautiful templates (Sandbox Mode) if no keys are found.
+    We STRICTLY prioritize Hugging Face Inference if HF_API_TOKEN is set.
+    Falls back to Stability AI, Replicate, Pollinations, or curated beautiful templates (Sandbox Mode) if needed.
     """
+    hf_token = os.environ.get("HF_API_TOKEN")
     stability_key = os.environ.get("STABILITY_API_KEY")
     replicate_token = os.environ.get("REPLICATE_API_TOKEN")
-    hf_token = os.environ.get("HF_API_TOKEN")
-    
-    # ── STABILITY AI ──────────────────────────────────
+
+    # ── HUGGING FACE INFERENCE (Strictly prioritize if token set) ──
+    if hf_token:
+        # Quick DNS check — verify we can reach the new Hugging Face router
+        import socket
+        try:
+            socket.setdefaulttimeout(3)
+            socket.getaddrinfo("router.huggingface.co", 443)
+            hf_reachable = True
+        except Exception:
+            hf_reachable = False
+            print("[AI Studio] router.huggingface.co domain unreachable.")
+
+        if hf_reachable:
+            HF_MODELS = [
+                "black-forest-labs/FLUX.1-schnell",
+                "black-forest-labs/FLUX.1-dev",
+                "stabilityai/stable-diffusion-3.5-large"
+            ]
+            hf_headers = {
+                "Authorization": f"Bearer {hf_token}",
+                "Content-Type": "application/json",
+            }
+            payload = {
+                "inputs": prompt,
+                "parameters": {"width": 512, "height": 512},
+                "options": {"wait_for_model": True},
+            }
+            for model_id in HF_MODELS:
+                api_url = f"https://router.huggingface.co/hf-inference/models/{model_id}"
+                print(f"[AI Studio] Querying Hugging Face — model: {model_id} via {api_url}")
+                for attempt in range(8):
+                    try:
+                        response = requests.post(api_url, headers=hf_headers, json=payload, timeout=120)
+                        if response.status_code == 200:
+                            ct = response.headers.get("Content-Type", "")
+                            if "image" in ct or len(response.content) > 5000:
+                                print(f"[AI Studio] HF image received from {model_id} (attempt {attempt+1})")
+                                return Image.open(io.BytesIO(response.content)).convert("RGBA")
+                            break
+                        if response.status_code == 503:
+                            try:
+                                wait_time = min(float(response.json().get("estimated_time", 20)), 30)
+                            except Exception:
+                                wait_time = 20
+                            print(f"[AI Studio] HF model loading. Waiting {wait_time:.0f}s (attempt {attempt+1}/8)...")
+                            time.sleep(wait_time)
+                            continue
+                        print(f"[AI Studio] HF {model_id} HTTP {response.status_code}: {response.text[:200]}")
+                        break
+                    except requests.exceptions.Timeout:
+                        print(f"[AI Studio] HF {model_id} timeout attempt {attempt+1}, retrying...")
+                        continue
+                    except Exception as exc:
+                        print(f"[AI Studio] HF {model_id} exception: {exc}")
+                        break
+
+    # ── STABILITY AI (Fallback) ───────────────────────
     if stability_key:
         try:
             print("[AI Studio] Querying Stability AI for background...")
@@ -109,11 +166,10 @@ def generate_background_via_api(prompt: str, image_type: str) -> Image.Image:
         except Exception as e:
             print(f"[AI Studio] Stability AI call failed: {e}")
 
-    # ── REPLICATE ─────────────────────────────────────
-    elif replicate_token:
+    # ── REPLICATE (Fallback) ──────────────────────────
+    if replicate_token:
         try:
             print("[AI Studio] Querying Replicate for background...")
-            # Using standard SDXL model on Replicate
             response = requests.post(
                 "https://api.replicate.com/v1/predictions",
                 headers={
@@ -121,7 +177,7 @@ def generate_background_via_api(prompt: str, image_type: str) -> Image.Image:
                     "Content-Type": "application/json"
                 },
                 json={
-                    "version": "da14632c0d654772071f5482d021f74c163baf758e14d398d404ea08af34e7a4", # SDXL version
+                    "version": "da14632c0d654772071f5482d021f74c163baf758e14d398d404ea08af34e7a4",
                     "input": {
                         "prompt": prompt,
                         "width": 768,
@@ -136,7 +192,6 @@ def generate_background_via_api(prompt: str, image_type: str) -> Image.Image:
             if response.status_code == 201:
                 pred = response.json()
                 get_url = pred["urls"]["get"]
-                # Poll Replicate prediction
                 for _ in range(30):
                     time.sleep(1)
                     poll_resp = requests.get(get_url, headers={"Authorization": f"Token {replicate_token}"})
@@ -150,8 +205,7 @@ def generate_background_via_api(prompt: str, image_type: str) -> Image.Image:
         except Exception as e:
             print(f"[AI Studio] Replicate call failed: {e}")
 
-    # ── POLLINATIONS AI (Free, no key needed) ────────
-    # Try Pollinations first — works everywhere, no API key required
+    # ── POLLINATIONS AI (Fallback) ────────────────────
     try:
         import urllib.parse
         encoded_prompt = urllib.parse.quote(prompt)
@@ -168,62 +222,6 @@ def generate_background_via_api(prompt: str, image_type: str) -> Image.Image:
             print(f"[AI Studio] Pollinations.AI failed: HTTP {resp.status_code}, bytes={len(resp.content)}")
     except Exception as e:
         print(f"[AI Studio] Pollinations.AI error: {e}")
-
-    # ── HUGGING FACE INFERENCE (fallback if token set) ─
-    if hf_token:
-        # Quick DNS check — skip HF entirely if domain is unreachable
-        import socket
-        try:
-            socket.setdefaulttimeout(3)
-            socket.getaddrinfo("api-inference.huggingface.co", 443)
-            hf_reachable = True
-        except Exception:
-            hf_reachable = False
-            print("[AI Studio] HF domain unreachable — skipping HF, going to Sandbox.")
-
-        if hf_reachable:
-            HF_MODELS = [
-                "runwayml/stable-diffusion-v1-5",
-                "stabilityai/stable-diffusion-2-1",
-                "CompVis/stable-diffusion-v1-4",
-            ]
-            hf_headers = {
-                "Authorization": f"Bearer {hf_token}",
-                "Content-Type": "application/json",
-            }
-            payload = {
-                "inputs": prompt,
-                "parameters": {"num_inference_steps": 25, "guidance_scale": 7.5, "width": 512, "height": 512},
-                "options": {"wait_for_model": True},
-            }
-            for model_id in HF_MODELS:
-                api_url = f"https://api-inference.huggingface.co/models/{model_id}"
-                print(f"[AI Studio] Querying Hugging Face — model: {model_id}")
-                for attempt in range(8):
-                    try:
-                        response = requests.post(api_url, headers=hf_headers, json=payload, timeout=120)
-                        if response.status_code == 200:
-                            ct = response.headers.get("Content-Type", "")
-                            if "image" in ct or len(response.content) > 5000:
-                                print(f"[AI Studio] HF image received from {model_id} (attempt {attempt+1})")
-                                return Image.open(io.BytesIO(response.content)).convert("RGBA")
-                            break
-                        if response.status_code == 503:
-                            try:
-                                wait_time = min(float(response.json().get("estimated_time", 20)), 30)
-                            except Exception:
-                                wait_time = 20
-                            print(f"[AI Studio] HF model loading. Waiting {wait_time:.0f}s (attempt {attempt+1}/8)...")
-                            time.sleep(wait_time)
-                            continue
-                        print(f"[AI Studio] HF {model_id} HTTP {response.status_code}")
-                        break
-                    except requests.exceptions.Timeout:
-                        print(f"[AI Studio] HF {model_id} timeout attempt {attempt+1}, retrying...")
-                        continue
-                    except Exception as exc:
-                        print(f"[AI Studio] HF {model_id} exception: {exc}")
-                        break
 
 
     print(f"[AI Studio] Entering Sandbox Mode for background '{image_type}'...")
