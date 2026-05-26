@@ -34,53 +34,100 @@ SANDBOX_TEMPLATES = {
     "model_closeup": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=800"
 }
 
-def remove_background_floodfill(img: Image.Image, tolerance: int = 35) -> Image.Image:
+def remove_background_smart(img: Image.Image, tolerance: int = 40, keying_tolerance: int = 70) -> Image.Image:
     """
-    Removes background using a highly robust multi-corner flood-fill algorithm.
-    Works beautifully for uniform backgrounds of any color (white, black, green, etc.).
+    Advanced, dependency-free background removal combining border-based flood-fill
+    with global color-keying for isolated background islands (like bokeh lights).
     """
     import collections
     img = img.convert("RGBA")
     w, h = img.size
-    
-    # Corners to start flood fill from
-    corners = [(0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1)]
-    
     pixels = img.load()
+    
+    # 1. Sample border colors to get background color palette
+    border_colors = []
+    # Sample top & bottom borders
+    for x in range(0, w, 10):
+        border_colors.append(pixels[x, 0][:3])
+        border_colors.append(pixels[x, h - 1][:3])
+    # Sample left & right borders
+    for y in range(0, h, 10):
+        border_colors.append(pixels[0, y][:3])
+        border_colors.append(pixels[w - 1, y][:3])
+        
+    # Keep only unique background colors
+    unique_bg_colors = []
+    for c in border_colors:
+        if not any(sum(abs(c[i] - uc[i]) for i in range(3)) < 15 for uc in unique_bg_colors):
+            unique_bg_colors.append(c)
+            
+    # 2. Perform border-based flood fill (Queue-based BFS)
+    # Start queue with all border pixels
+    queue = collections.deque()
     visited = set()
     mask = Image.new("L", (w, h), 255)
     mask_pixels = mask.load()
     
-    for start_x, start_y in corners:
-        if (start_x, start_y) in visited:
-            continue
-            
-        start_color = pixels[start_x, start_y]
-        # Queue for BFS
-        queue = collections.deque([(start_x, start_y)])
-        visited.add((start_x, start_y))
+    # Add top and bottom borders to queue
+    for x in range(w):
+        queue.append((x, 0))
+        queue.append((x, h - 1))
+        visited.add((x, 0))
+        visited.add((x, h - 1))
+    # Add left and right borders to queue
+    for y in range(h):
+        queue.append((0, y))
+        queue.append((w - 1, y))
+        visited.add((0, y))
+        visited.add((w - 1, y))
         
-        while queue:
-            cx, cy = queue.popleft()
-            
-            # Make it transparent in mask
-            mask_pixels[cx, cy] = 0
-            
-            # Check 4 neighbors
-            for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
-                nx, ny = cx + dx, cy + dy
-                if 0 <= nx < w and 0 <= ny < h and (nx, ny) not in visited:
-                    n_color = pixels[nx, ny]
-                    # Calculate Euclidean distance in RGB
-                    dist = ((n_color[0] - start_color[0]) ** 2 +
-                            (n_color[1] - start_color[1]) ** 2 +
-                            (n_color[2] - start_color[2]) ** 2) ** 0.5
+    while queue:
+        cx, cy = queue.popleft()
+        mask_pixels[cx, cy] = 0
+        c_color = pixels[cx, cy][:3]
+        
+        # Check neighbors
+        for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+            nx, ny = cx + dx, cy + dy
+            if 0 <= nx < w and 0 <= ny < h and (nx, ny) not in visited:
+                n_color = pixels[nx, ny][:3]
+                
+                # Check similarity to current pixel color
+                dist_prev = ((n_color[0] - c_color[0]) ** 2 +
+                             (n_color[1] - c_color[1]) ** 2 +
+                             (n_color[2] - c_color[2]) ** 2) ** 0.5
+                             
+                # Also check similarity to ANY of the unique border colors
+                min_bg_dist = min(
+                    ((n_color[0] - bg[0]) ** 2 +
+                     (n_color[1] - bg[1]) ** 2 +
+                     (n_color[2] - bg[2]) ** 2) ** 0.5
+                    for bg in unique_bg_colors
+                )
+                
+                if dist_prev <= tolerance or min_bg_dist <= tolerance:
+                    visited.add((nx, ny))
+                    queue.append((nx, ny))
                     
-                    if dist <= tolerance:
-                        visited.add((nx, ny))
-                        queue.append((nx, ny))
-                        
-    # Apply the mask to the image alpha channel
+    # 3. Clean up remaining disconnected background islands (like floating bokeh lights)
+    # For any pixel not visited, if it is highly similar to background, remove it!
+    for y in range(h):
+        for x in range(w):
+            if mask_pixels[x, y] == 255:
+                r, g, b, a = pixels[x, y]
+                min_bg_dist = min(
+                    ((r - bg[0]) ** 2 +
+                     (g - bg[1]) ** 2 +
+                     (b - bg[2]) ** 2) ** 0.5
+                    for bg in unique_bg_colors
+                )
+                
+                # If pixel matches background color very closely, make it transparent
+                if min_bg_dist < keying_tolerance:
+                    mask_pixels[x, y] = 0
+                    
+    # 4. Smooth the edges of the mask
+    mask = mask.filter(ImageFilter.GaussianBlur(0.8))
     img.putalpha(mask)
     return img
 
@@ -95,12 +142,12 @@ def remove_background(img_data: bytes) -> Image.Image:
         output_data = remove(img_data)
         return Image.open(io.BytesIO(output_data))
     except Exception as e:
-        print(f"[AI Studio] rembg extraction failed or not installed ({e}). Using advanced flood-fill fallback...")
+        print(f"[AI Studio] rembg extraction failed or not installed ({e}). Using advanced smart fallback...")
         try:
             img = Image.open(io.BytesIO(img_data)).convert("RGBA")
-            return remove_background_floodfill(img, tolerance=35)
+            return remove_background_smart(img, tolerance=40, keying_tolerance=70)
         except Exception as fallback_err:
-            print(f"[AI Studio] Advanced floodfill fallback also failed: {fallback_err}. Using absolute thresholding fallback.")
+            print(f"[AI Studio] Advanced smart fallback also failed: {fallback_err}. Using absolute thresholding fallback.")
             try:
                 img = Image.open(io.BytesIO(img_data)).convert("RGBA")
                 # Basic thresholding to remove light-colored backgrounds
