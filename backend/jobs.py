@@ -75,6 +75,10 @@ def generate_background_via_api(prompt: str, image_type: str) -> Image.Image:
     We STRICTLY prioritize Hugging Face Inference if HF_API_TOKEN is set.
     Falls back to Stability AI, Replicate, Pollinations, or curated beautiful templates (Sandbox Mode) if needed.
     """
+    if image_type == "white_background":
+        print("[AI Studio] Solid white background requested. Bypassing API and returning pure white background.")
+        return Image.new("RGBA", (800, 800), (255, 255, 255, 255))
+
     hf_token = os.environ.get("HF_API_TOKEN")
     stability_key = os.environ.get("STABILITY_API_KEY")
     replicate_token = os.environ.get("REPLICATE_API_TOKEN")
@@ -271,17 +275,18 @@ def composite_images(bg_img: Image.Image, product_png: Image.Image, image_type: 
     
     # ── Calculate Scaling and Positioning ─────────────
     # Standard models or closeups might need smaller jewelry scaling, while standard studio shots need bigger products
-    scale_factor = 0.55  # default
+    scale_factor = 0.70  # default
     offset_y = 0         # center
     
     if "model_closeup" in image_type:
-        scale_factor = 0.22  # small jewelry fitting on neck/wrist
-        offset_y = 120       # lower part of face/neck
+        scale_factor = 0.40  # small jewelry fitting on neck/wrist
+        offset_y = 60        # lower part of face/neck
     elif "model_" in image_type:
-        scale_factor = 0.18  # even smaller if full body or model front
-        offset_y = 80
+        scale_factor = 0.35  # smaller if full body or model front
+        offset_y = 40
     elif "white_background" in image_type:
-        scale_factor = 0.70  # standard large e-commerce shot
+        scale_factor = 0.85  # standard large e-commerce shot
+
         
     # Resize product maintaining aspect ratio
     new_h = int(800 * scale_factor)
