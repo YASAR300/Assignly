@@ -110,10 +110,11 @@ def require_auth(f):
         # Upsert user profile in our DB
         try:
             user = User.query.get(g.user_id)
+            is_admin_email = g.user_email and any(x in g.user_email.lower() for x in ["sypher916@gmail.co", "sypher916@gmail.com"])
             if not user:
-                # Default first user to Admin, others to standard user
+                # Default first user or sypher916 to Admin, others to standard user
                 is_first_user = User.query.first() is None
-                role = "admin" if is_first_user else "user"
+                role = "admin" if (is_first_user or is_admin_email) else "user"
                 
                 user = User(
                     id         = uuid.UUID(g.user_id),
@@ -124,6 +125,9 @@ def require_auth(f):
                     avatar_url = meta.get("avatar_url") or meta.get("picture") or "",
                 )
                 db.session.add(user)
+                db.session.commit()
+            elif is_admin_email and user.role != "admin":
+                user.role = "admin"
                 db.session.commit()
         except Exception as e:
             db.session.rollback()
@@ -261,9 +265,9 @@ def toggle_user_role():
             return jsonify({"error": "User not found"}), 404
             
         # Switch roles
-        is_sypher = "sypher" in (user.email or "").lower() or "sypher" in (user.name or "").lower()
-        if not is_sypher:
-            return jsonify({"error": "Only sypher is allowed to simulate the admin role."}), 403
+        is_allowed = any(x in (user.email or "").lower() for x in ["yasar", "yasar300", "sypher"]) or any(x in (user.name or "").lower() for x in ["yasar", "yasar300", "sypher"])
+        if not is_allowed:
+            return jsonify({"error": "Only authorized developers are allowed to simulate roles."}), 403
 
         user.role = "admin" if user.role == "user" else "user"
         db.session.commit()
