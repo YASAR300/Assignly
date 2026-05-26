@@ -34,6 +34,56 @@ SANDBOX_TEMPLATES = {
     "model_closeup": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=800"
 }
 
+def remove_background_floodfill(img: Image.Image, tolerance: int = 35) -> Image.Image:
+    """
+    Removes background using a highly robust multi-corner flood-fill algorithm.
+    Works beautifully for uniform backgrounds of any color (white, black, green, etc.).
+    """
+    import collections
+    img = img.convert("RGBA")
+    w, h = img.size
+    
+    # Corners to start flood fill from
+    corners = [(0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1)]
+    
+    pixels = img.load()
+    visited = set()
+    mask = Image.new("L", (w, h), 255)
+    mask_pixels = mask.load()
+    
+    for start_x, start_y in corners:
+        if (start_x, start_y) in visited:
+            continue
+            
+        start_color = pixels[start_x, start_y]
+        # Queue for BFS
+        queue = collections.deque([(start_x, start_y)])
+        visited.add((start_x, start_y))
+        
+        while queue:
+            cx, cy = queue.popleft()
+            
+            # Make it transparent in mask
+            mask_pixels[cx, cy] = 0
+            
+            # Check 4 neighbors
+            for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                nx, ny = cx + dx, cy + dy
+                if 0 <= nx < w and 0 <= ny < h and (nx, ny) not in visited:
+                    n_color = pixels[nx, ny]
+                    # Calculate Euclidean distance in RGB
+                    dist = ((n_color[0] - start_color[0]) ** 2 +
+                            (n_color[1] - start_color[1]) ** 2 +
+                            (n_color[2] - start_color[2]) ** 2) ** 0.5
+                    
+                    if dist <= tolerance:
+                        visited.add((nx, ny))
+                        queue.append((nx, ny))
+                        
+    # Apply the mask to the image alpha channel
+    img.putalpha(mask)
+    return img
+
 def remove_background(img_data: bytes) -> Image.Image:
     """
     Extract product from original background using rembg library.
@@ -45,29 +95,29 @@ def remove_background(img_data: bytes) -> Image.Image:
         output_data = remove(img_data)
         return Image.open(io.BytesIO(output_data))
     except Exception as e:
-        print(f"[AI Studio] rembg extraction failed or not installed ({e}). Using advanced PIL fallback...")
-        # Smart PIL Fallback: Create alpha channel from brightness threshold (assuming lighter/gray backgrounds)
+        print(f"[AI Studio] rembg extraction failed or not installed ({e}). Using advanced flood-fill fallback...")
         try:
             img = Image.open(io.BytesIO(img_data)).convert("RGBA")
-            # Basic thresholding to remove light-colored backgrounds
-            datas = img.getdata()
-            new_data = []
-            for item in datas:
-                # If pixel is very close to white/light grey, make it transparent
-                # This works beautifully for studio jewelry shots
-                avg = (item[0] + item[1] + item[2]) / 3
-                # Check variance to not remove actual silver/white diamonds
-                variance = max(abs(item[0]-avg), abs(item[1]-avg), abs(item[2]-avg))
-                if avg > 230 and variance < 15:
-                    new_data.append((255, 255, 255, 0))
-                else:
-                    new_data.append(item)
-            img.putdata(new_data)
-            return img
+            return remove_background_floodfill(img, tolerance=35)
         except Exception as fallback_err:
-            print(f"[AI Studio] Advanced PIL fallback also failed: {fallback_err}")
-            # Absolute last resort: return raw image as RGBA
-            return Image.open(io.BytesIO(img_data)).convert("RGBA")
+            print(f"[AI Studio] Advanced floodfill fallback also failed: {fallback_err}. Using absolute thresholding fallback.")
+            try:
+                img = Image.open(io.BytesIO(img_data)).convert("RGBA")
+                # Basic thresholding to remove light-colored backgrounds
+                datas = img.getdata()
+                new_data = []
+                for item in datas:
+                    avg = (item[0] + item[1] + item[2]) / 3
+                    variance = max(abs(item[0]-avg), abs(item[1]-avg), abs(item[2]-avg))
+                    if avg > 230 and variance < 15:
+                        new_data.append((255, 255, 255, 0))
+                    else:
+                        new_data.append(item)
+                img.putdata(new_data)
+                return img
+            except Exception as final_err:
+                print(f"[AI Studio] Absolute fallback failed: {final_err}")
+                return Image.open(io.BytesIO(img_data)).convert("RGBA")
 
 def generate_background_via_api(prompt: str, image_type: str) -> Image.Image:
     """
