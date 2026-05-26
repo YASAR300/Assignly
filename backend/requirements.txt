@@ -6,4 +6,9 @@ psycopg2-binary
 python-dotenv==1.0.1
 requests==2.31.0
 gunicorn
+Pillow==10.2.0
+rembg==2.0.53
+onnxruntime>=1.16.0
+
+
 
