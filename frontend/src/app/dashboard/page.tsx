@@ -327,9 +327,9 @@ export default function Dashboard() {
   // ── Toggle user role (DX testing helper) ──────────
   const toggleRole = async () => {
     if (!session) return
-    const isSypher = session?.user?.email?.toLowerCase().includes('sypher') || currentUser?.name?.toLowerCase().includes('sypher')
-    if (!isSypher) {
-      toast.error('Only sypher is allowed to simulate the admin role.')
+    const isDeveloper = session?.user?.email?.toLowerCase().includes('yasar') || session?.user?.email?.toLowerCase().includes('sypher') || currentUser?.name?.toLowerCase().includes('yasar') || currentUser?.name?.toLowerCase().includes('sypher')
+    if (!isDeveloper) {
+      toast.error('Only authorized developers are allowed to simulate roles.')
       return
     }
 
@@ -792,7 +792,7 @@ export default function Dashboard() {
 
   const userName = currentUser?.name || session?.user?.user_metadata?.full_name || session?.user?.user_metadata?.name || 'Collaborator'
   const userAvatar = currentUser?.avatar_url || session?.user?.user_metadata?.avatar_url || session?.user?.user_metadata?.picture
-  const isSypher = !!(session?.user?.email?.toLowerCase().includes('sypher') || currentUser?.name?.toLowerCase().includes('sypher'))
+  const isDeveloper = !!(session?.user?.email?.toLowerCase().includes('yasar') || session?.user?.email?.toLowerCase().includes('sypher') || currentUser?.name?.toLowerCase().includes('yasar') || currentUser?.name?.toLowerCase().includes('sypher'))
 
   // ── Render ────────────────────────────────────────
   return (
@@ -839,8 +839,8 @@ export default function Dashboard() {
 
           {/* Center / Right controls */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            {/* Toggle Role Button (DX Testing Utility) - Restricted to Sypher */}
-            {isSypher && (
+            {/* Toggle Role Button (DX Testing Utility) - Restricted to Developers */}
+            {isDeveloper && (
               <button
                 disabled={togglingRole}
                 onClick={toggleRole}
