@@ -6,11 +6,12 @@ BEGIN;
 -- 1. Rename profiles to users table if profiles exists, else create users
 DO $$
 BEGIN
-    IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'profiles') THEN
+    IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'profiles')
+       AND NOT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'users') THEN
         ALTER TABLE public.profiles RENAME TO users;
         RAISE NOTICE 'Renamed table public.profiles to public.users';
-    ELSE
-        CREATE TABLE IF NOT EXISTS public.users (
+    ELSIF NOT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'users') THEN
+        CREATE TABLE public.users (
             id UUID PRIMARY KEY,
             email VARCHAR(255) UNIQUE NOT NULL,
             name VARCHAR(255),
