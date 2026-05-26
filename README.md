@@ -1,220 +1,267 @@
-# Assignly 🚀
+# Assignly — AI Studio for Jewelry Photography
 
-Assignly is a modern, high-fidelity, and secure task management web application that enables collaborative teams to organize, prioritize, and delegate tasks seamlessly. Featuring deep Google OAuth 2.0 authentication and automated transactional Gmail notifications, the platform ensures teams remain in sync in real-time.
+> **AI-powered task management platform for professional jewelry photography.**  
+> Admins create and assign photo tasks. Team members enter the **AI Studio** to generate exactly **8 professional product images** per task — backgrounds are AI-generated while the product stays pixel-perfect consistent across all shots.
+
+[![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](https://nextjs.org)
+[![Flask](https://img.shields.io/badge/Flask-3.x-green?logo=flask)](https://flask.palletsprojects.com)
+[![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-3ECF8E?logo=supabase)](https://supabase.com)
+[![Pollinations AI](https://img.shields.io/badge/AI-Pollinations.AI-ff6b35)](https://pollinations.ai)
 
 ---
 
-## Technical Stack & Architecture
+## ✨ Key Features
 
-Assignly is built using a highly optimized, cross-origin decouple model that guarantees speed, type-safety, and seamless cross-platform synchronization.
+| Feature | Detail |
+|---|---|
+| **Role-based access** | Admin (create / assign / review) · User (AI Studio generator) |
+| **AI Image Generation** | Pollinations.AI (Flux) → HuggingFace → **Sandbox Mode** fallback chain |
+| **Background Removal** | `rembg` (onnxruntime) for clean foreground extraction; smart PIL fallback |
+| **PIL Compositing** | Professional drop-shadow, smart scaling & centering per shot type |
+| **8 mandatory variations** | 1 white BG · 2 themed · 2 creative · 3 human model angles |
+| **Email Notifications** | Brevo SMTP — assignment, submission, acceptance, revision, invite |
+| **Kanban Dashboard** | 6-column Kanban with real-time job polling & lightbox image viewer |
+| **Rate Limiting** | 100 req/min general · 10 AI generations/hr per user |
+| **Audit Logs** | Every action written to `audit_logs` table with full details |
+| **Background Jobs** | `ThreadPoolExecutor` async generation with live progress polling |
 
-```mermaid
-graph TD
-    subgraph Frontend [Next.js Client - Vercel]
-        UA[User Agent / Browser] -->|Google OAuth 2.0| SupabaseAuth[Supabase Auth Engine]
-        UA -->|Fetch Data with Bearer JWT| NextApp[Next.js App Router]
-    end
+---
 
-    subgraph Backend [Flask REST API - Railway/Render]
-        NextApp -->|HTTP Requests + Access Token| FlaskAPI[Flask Core Server]
-        FlaskAPI -->|Local Token Decoding HS256| JWTAuth[JWT Auth Middleware]
-        FlaskAPI -->|SQLAlchemy ORM Queries| DB_ORM[PostgreSQL Connection]
-        FlaskAPI -->|Trigger Mailer| GmailSMTP[Gmail SMTP Engine]
-    end
+## 🏗 Architecture
 
-    subgraph Database [Postgres Database - Supabase]
-        DB_ORM -->|Direct Queries| DB_SQL[(Supabase Postgres DB)]
-        SupabaseAuth -->|Trigger Synced Profile| DB_SQL
-    end
-
-    subgraph Notifications [Google Mail System]
-        GmailSMTP -->|StartTLS Session| GoogleSMTP[Google SMTP Servers]
-        GoogleSMTP -->|Auto-delivered HTML Alerts| UserMail[Collaborator Mailboxes]
-    end
 ```
-
-### Key Components
-
-1. **Frontend (Next.js + TypeScript + Tailwind CSS)**
-   * Built with standard App Router.
-   * Responsive Kanban Board split by stages: *To Do*, *In Progress*, and *Completed*.
-   * Seamless user registration and authentication via Google OAuth 2.0 handled securely in client cookies.
-   * State-of-the-art dark-theme UI featuring glowing accent structures and glassmorphism.
-2. **Backend (Flask + SQLAlchemy)**
-   * Clean RESTful API serving JSON payloads with full CORS enabled.
-   * Custom token validation decorator (`@require_auth`) decoding Supabase user access tokens locally.
-   * PostgreSQL connectivity using raw optimized transactions under Flask-SQLAlchemy.
-3. **Database (Supabase PostgreSQL + Trigger sync)**
-   * Multi-table model storing user profiles and tasks with cascade deletions.
-   * **PostgreSQL Database Trigger** listening to signs up in `auth.users` to automatically populate the public profile with Google display names, emails, and profile picture avatars.
-4. **Email (Gmail SMTP Integration)**
-   * Sends responsive, visually striking HTML transactional notification emails when tasks are assigned or marked as completed.
-
----
-
-## Repository Directory Layout
-
-```text
-/
-├── migrations/                  # Database migration schemas
-│   └── 01_init_schema.sql       # Live schema SQL with tables, triggers & RLS
-├── backend/                     # Python Flask REST API
-│   ├── app.py                   # Main Flask API controllers and middleware
-│   ├── config.py                # Environment variable configuration loading
-│   ├── models.py                # Flask-SQLAlchemy database mappings
-│   ├── email_utils.py           # Gmail SMTP email senders and HTML templates
-│   ├── requirements.txt         # Pip package dependency checklist
-│   ├── apply_migrations.py      # Direct Python script applying SQL to Supabase
-│   └── .env.example             # Backend local environment placeholders
-├── frontend/                    # Next.js Single Page Application
-│   ├── src/
-│   │   ├── app/                 # Next.js App Router Page components
-│   │   │   ├── layout.tsx       # Global layouts & custom app metadata
-│   │   │   ├── page.tsx         # Landing/Login page with Google Auth trigger
-│   │   │   ├── dashboard/       # Kanban board task manager dashboard
-│   │   │   └── auth/callback/   # Google OAuth callback router
-│   │   └── lib/
-│   │       └── supabase.ts      # Supabase Browser client initialization
-│   ├── package.json             # Node package dependency checklist
-│   └── .env.example             # Frontend local environment placeholders
-├── .gitignore                   # Global file ignore listings (protects local secrets)
-├── .env.example                 # Combined repository environment placeholders
-└── README.md                    # Core architecture blueprint and execution guide
+┌─────────────────────────────────────────────────────────────────┐
+│                        CLIENT (Browser)                         │
+│   Next.js 16 · TypeScript · Supabase Auth · react-hot-toast    │
+└────────────────────────┬───────────────────────────────────────┘
+                         │ REST API (fetch)
+                         ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    FLASK BACKEND (Python)                        │
+│                                                                  │
+│  ┌─────────────┐  ┌──────────────┐  ┌────────────────────────┐ │
+│  │  app.py     │  │  jobs.py     │  │  email_utils.py        │ │
+│  │  Routes     │  │  Background  │  │  Brevo SMTP Templates  │ │
+│  │  Auth       │  │  Generation  │  │  HTML emails           │ │
+│  │  Rate Limit │  │  Pipeline    │  └────────────────────────┘ │
+│  └──────┬──────┘  └──────┬───────┘                             │
+│         │                │                                      │
+│  ┌──────▼──────┐  ┌──────▼───────────────────────────────────┐│
+│  │  models.py  │  │  AI Generation Pipeline                   ││
+│  │  SQLAlchemy │  │                                           ││
+│  │  ORM        │  │  1. Download product image                ││
+│  └──────┬──────┘  │  2. rembg background removal             ││
+│         │         │  3. Pollinations.AI (Flux model) → BG    ││
+│         │         │  4. PIL composite + drop shadow          ││
+│         │         │  5. Save 800×800 JPEG to /static/        ││
+│         │         │  6. DB record + Audit log                ││
+│         │         └──────────────────────────────────────────┘│
+└─────────┬───────────────────────────────────────────────────────┘
+          │
+          ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    SUPABASE (Cloud)                             │
+│   PostgreSQL · Row Level Security · Auth (OAuth + Magic Link)  │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Environment Variables Configuration Guide
+## 🎨 AI Generation Pipeline
 
-To launch the project, create `.env` in the `/backend` folder and `.env.local` in the `/frontend` folder:
+```
+Product Photo (uploaded by Admin)
+        │
+        ▼
+  [rembg / PIL]  ←── Background removal (transparent PNG)
+        │
+        ▼
+ Transparent PNG  ──┐
+                    │
+  [Pollinations.AI] │    8 shot types:
+  Flux model   ───► ├──► white_background       (pure studio shot)
+                    ├──► theme_marble            (luxury marble backdrop)
+  [HuggingFace]     ├──► theme_velvet            (rich velvet texture)
+  SD v1-5 / SD 2.1  ├──► creative_sunset        (golden hour vibe)
+  (if reachable)    ├──► creative_forest        (natural setting)
+                    ├──► model_front             (human model, full view)
+  [Sandbox Mode]    ├──► model_side              (profile angle)
+  Unsplash URLs     └──► model_closeup           (close-up detail)
+                              │
+                              ▼
+                    [PIL Compositor]
+                    • Drop shadow (blurred alpha mask)
+                    • Smart scale: 18%–70% depending on shot type
+                    • Center + vertical offset per angle
+                              │
+                              ▼
+                    800×800 JPEG → /static/generated/
+                              │
+                              ▼
+                    DB record + Audit log entry
+```
 
-### Backend Variables (`backend/.env`)
-* `DATABASE_URL`: The direct connection URI to the Supabase Postgres instance.
-* `SUPABASE_JWT_SECRET`: Secret key used to decode client tokens (Supabase Dashboard -> Settings -> API).
-* `SMTP_USER`: System Gmail address used to transmit notifications.
-* `SMTP_PASSWORD`: **16-character Google App Password** generated under Google Account Security (requires 2-Step Verification).
-* `SMTP_SERVER`: `smtp.gmail.com`
-* `SMTP_PORT`: `587`
-* `FRONTEND_URL`: URL pointing to the Next.js client (e.g. `http://localhost:3000`).
-
-### Frontend Variables (`frontend/.env.local`)
-* `NEXT_PUBLIC_SUPABASE_URL`: The API URL of your Supabase project.
-* `NEXT_PUBLIC_SUPABASE_ANON_KEY`: The anonymous API client key of your Supabase project.
-* `NEXT_PUBLIC_BACKEND_URL`: The API endpoint of your Flask backend (e.g. `http://localhost:5000`).
+> **Critical constraint:** The product foreground is extracted **once** and composited onto every background — so the product looks exactly the same in all 8 images, ensuring brand consistency.
 
 ---
 
-## Database Schema & Trigger Specs
+## 🗂 Project Structure
 
-```sql
--- Profiles table representing verified users
-CREATE TABLE public.profiles (
-    id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
-    email VARCHAR(255) UNIQUE NOT NULL,
-    full_name VARCHAR(255),
-    avatar_url TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
-);
-
--- Tasks table representing deliverables
-CREATE TABLE public.tasks (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    title VARCHAR(255) NOT NULL,
-    description TEXT,
-    status VARCHAR(50) DEFAULT 'todo' NOT NULL,
-    priority VARCHAR(50) DEFAULT 'medium' NOT NULL,
-    due_date TIMESTAMP WITH TIME ZONE,
-    created_by UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
-    assigned_to UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
-);
-
--- Automatic synchronization trigger function
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER AS $$
-BEGIN
-    INSERT INTO public.profiles (id, email, full_name, avatar_url)
-    VALUES (
-        NEW.id,
-        NEW.email,
-        COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.raw_user_meta_data->>'name', 'User'),
-        COALESCE(NEW.raw_user_meta_data->>'avatar_url', NEW.raw_user_meta_data->>'picture', '')
-    )
-    ON CONFLICT (id) DO UPDATE SET
-        email = EXCLUDED.email,
-        full_name = EXCLUDED.full_name,
-        avatar_url = EXCLUDED.avatar_url,
-        updated_at = NOW();
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+```
+assignly/
+├── backend/                        # Flask REST API
+│   ├── app.py                      # Routes, auth, CORS, rate limiting
+│   ├── jobs.py                     # AI generation pipeline + background jobs
+│   ├── models.py                   # SQLAlchemy: User, Task, GeneratedImage, AuditLog
+│   ├── config.py                   # Config loaded from .env
+│   ├── email_utils.py              # Brevo SMTP + rich HTML email templates
+│   ├── apply_migrations.py         # Runs SQL migrations against Supabase
+│   ├── generate_samples_script.py  # Demo image batch generator
+│   ├── static/
+│   │   ├── uploads/                # Admin-uploaded product images
+│   │   └── generated/              # AI-generated composite images
+│   └── requirements.txt
+│
+├── frontend/                       # Next.js 16 App Router (TypeScript strict)
+│   ├── src/app/
+│   │   ├── page.tsx                # Landing / login page
+│   │   ├── layout.tsx              # Root layout + Toaster
+│   │   ├── globals.css             # Global styles
+│   │   ├── auth/callback/          # Supabase OAuth callback handler
+│   │   └── dashboard/
+│   │       └── page.tsx            # Full dashboard + embedded AI Studio
+│   └── src/lib/
+│       └── supabase.ts             # Supabase client singleton
+│
+├── migrations/
+│   ├── 01_init_schema.sql          # Core: users, tasks, RLS
+│   └── 02_ai_studio.sql            # generated_images, audit_logs, updated RLS
+│
+├── generated_samples/              # 8 demo images from generate_samples_script.py
+│   └── README.md
+│
+├── .env.example                    # Template for backend secrets
+└── README.md
 ```
 
 ---
 
-## Detailed Local Setup & Launch Guide
+## 🔄 Task Status Flow
 
-### 1. Database Setup
-Ensure your Supabase project is active, then execute the schemas and triggers by running the Python applicator inside the `/backend` directory:
+```
+pending → assigned → in_progress → submitted → accepted
+                                           ↘
+                                    revision_requested → in_progress
+```
+
+| Status | Meaning |
+|---|---|
+| `pending` | Created but unassigned |
+| `assigned` | Assigned to a team member |
+| `in_progress` | User has started generating images |
+| `submitted` | User submitted all 8 final images for review |
+| `accepted` | Admin approved the submission |
+| `revision_requested` | Admin sent back for changes |
+
+---
+
+## 📧 Email Notifications
+
+| Trigger | Recipient | Content |
+|---|---|---|
+| Task assigned | Assignee | Title · description · product photo · due date · priority |
+| Re-assigned | New assignee | Same as above |
+| User submits 8 images | Admin | Review link + submitter name |
+| Admin accepts | Assignee | Acceptance message + reviewer feedback |
+| Admin requests revision | Assignee | Revision notes + feedback |
+| Team member invited | Invitee | Invite link + inviter name |
+
+---
+
+## 🚀 Local Setup
+
+### 1. Backend
+
 ```bash
 cd backend
 python -m venv venv
-# On Windows PowerShell:
-.\venv\Scripts\Activate.ps1
-# On Linux/macOS:
-source venv/bin/activate
+.\venv\Scripts\activate          # Windows
+# source venv/bin/activate       # macOS/Linux
 
 pip install -r requirements.txt
-python apply_migrations.py
-```
 
-### 2. Launch Flask Backend
-Execute the Flask server:
-```bash
+# Copy and fill in your secrets
+cp .env.example .env
+
+# Apply DB migrations to Supabase
+python apply_migrations.py
+
+# Start API server (port 5000)
 python app.py
 ```
-The server will boot on `http://localhost:5000` with active CORS mapping.
 
-### 3. Launch Next.js Frontend
-Open a new terminal session, navigate to the frontend directory, install npm modules, and run the developer server:
+### 2. Frontend
+
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
-Open `http://localhost:3000` inside your browser to start allocating tasks!
+
+Frontend runs at `http://localhost:3000` · Backend at `http://localhost:5000`.
 
 ---
 
-## Production Deployment Blueprint
+## 🔑 Environment Variables
 
-### A. Deploy Database (Supabase)
-The database tables, user triggers, Row Level Security (RLS) policies, and public access endpoints are already fully active once step 1 of local setup is executed!
+### `backend/.env`
 
-### B. Deploy Flask Backend (Railway / Render)
-1. Push this git repository to your GitHub account.
-2. Sign in to **Render** (render.com) or **Railway** (railway.app) and link the git repository.
-3. Select **Python Web Service**, set root folder as `backend`, and set launch start command as:
-   ```bash
-   gunicorn app:app
-   ```
-4. Map all environment variables directly into the service settings page (`DATABASE_URL`, `SUPABASE_JWT_SECRET`, `SMTP_USER`, `SMTP_PASSWORD`, and `FRONTEND_URL`).
+| Variable | Required | Description |
+|---|---|---|
+| `DATABASE_URL` | ✅ | Supabase PostgreSQL connection string |
+| `SUPABASE_URL` | ✅ | Supabase project URL |
+| `SUPABASE_ANON_KEY` | ✅ | Supabase anon/public key |
+| `SMTP_USER` | ✅ | Brevo SMTP login |
+| `SMTP_PASSWORD` | ✅ | Brevo SMTP password |
+| `SMTP_FROM` | ✅ | Sender email address |
+| `FRONTEND_URL` | ✅ | Full frontend origin (for CORS & email links) |
+| `BACKEND_URL` | ✅ | Public backend URL (for image URL construction) |
+| `HF_API_TOKEN` | ⚙️ | Hugging Face token (fallback AI, optional) |
+| `STABILITY_API_KEY` | ⚙️ | Stability AI key (premium, optional) |
+| `REPLICATE_API_TOKEN` | ⚙️ | Replicate token (premium, optional) |
 
-### C. Deploy Frontend (Vercel)
-1. Go to **Vercel** (vercel.com), select **Add New Project**, and link your repository.
-2. Set the root folder option as `frontend`.
-3. In **Environment Variables**, map:
-   * `NEXT_PUBLIC_SUPABASE_URL`
-   * `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-   * `NEXT_PUBLIC_BACKEND_URL`: Set this pointing to your live Flask backend domain on Railway/Render.
-4. Click **Deploy**. Vercel will compile and host the app globally on the first try!
+> **Note:** AI generation works out-of-the-box without any API keys via Pollinations.AI (free, no signup needed) and Sandbox Mode.
 
-### D. Configure OAuth Redirects on Supabase
-1. In your **Supabase Dashboard**, go to **Auth** -> **Providers** -> **Google**.
-2. Input your Google Client ID and Client Secret (obtained from Google Cloud Console).
-3. Copy the **Redirect URI** provided by Supabase and paste it into your Google Cloud OAuth Client credentials screen.
-4. In **Supabase Dashboard**, go to **Auth** -> **URL Configuration**. Set the **Site URL** as your live Vercel URL, and add `https://your-vercel-domain.vercel.app/auth/callback` to **Redirect URLs**.
+### `frontend/.env.local`
 
-You are now 100% production live with fully synchronized task boards and Gmail notification delivery!
+| Variable | Description |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key |
+| `NEXT_PUBLIC_BACKEND_URL` | Backend API base URL |
+
+---
+
+## 📦 Tech Stack
+
+| Layer | Technologies |
+|---|---|
+| **Frontend** | Next.js 16 · TypeScript (strict) · Lucide React · react-hot-toast |
+| **Backend** | Python 3.11 · Flask 3 · SQLAlchemy · Flask-CORS |
+| **AI / Image** | Pollinations.AI (Flux) · rembg · onnxruntime · Pillow |
+| **Auth** | Supabase Auth (Google OAuth + Magic Link) |
+| **Database** | Supabase PostgreSQL · Row Level Security |
+| **Email** | Brevo SMTP · Rich HTML templates |
+| **Deployment** | Render (backend) · Vercel (frontend) · Supabase (DB + Auth) |
+
+---
+
+## 🖼 Generated Samples
+
+See [`/generated_samples/`](./generated_samples/) for 8 demo images generated from a pearl jewelry reference photo using the full pipeline (background removal → Pollinations.AI → PIL composite).
+
+---
+
+## 📄 License
+
+MIT © 2026 Assignly
